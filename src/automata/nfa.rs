@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::default::Default;
 
+const EMPTY_STRING: char = '\0';
+
 #[derive(Debug)]
 pub struct Nfa {
     states: Vec<u32>,
@@ -14,7 +16,7 @@ impl Default for Nfa {
     fn default() -> Self {
         Nfa {
             states: vec![0],
-            alphabet: vec!['\0'],
+            alphabet: vec![EMPTY_STRING],
             transition_fn: HashMap::new(),
             start_state: 0,
             accept_states: Vec::new(),
@@ -105,7 +107,11 @@ impl Nfa {
         }
     }
 
-    fn concat(&mut self, other: & Self) -> Result<(), &'static str> {
+    fn concat(&mut self, root: u32, other: &Self) -> Result<(), &'static str> {
+        if !self.states.contains(&root) {
+            return Err("Can not add to a state that doesn't exist");
+        }
+
         let increment = *self.states.last().unwrap() + 1;
 
         for _ in other.states.iter() {
@@ -120,7 +126,7 @@ impl Nfa {
 
         for entry in other.transition_fn.iter() {
             for state in entry.1 {
-                self.add_transition((entry.0.0 + increment, entry.0.1), *state + increment)?;
+                self.add_transition((entry.0 .0 + increment, entry.0 .1), *state + increment)?;
             }
         }
 
@@ -130,7 +136,7 @@ impl Nfa {
             }
         }
 
-        self.add_transition((increment -1, '\0'), increment)?;
+        self.add_transition((root, EMPTY_STRING), increment)?;
 
         Ok(())
     }
@@ -167,7 +173,11 @@ mod tests {
         let nfa = Nfa::new();
 
         assert_eq!(vec![0], nfa.states, "States set should only contain a '0'");
-        assert_eq!(vec!['\0'], nfa.alphabet, "Alphabet should only contain an empty string");
+        assert_eq!(
+            vec![EMPTY_STRING],
+            nfa.alphabet,
+            "Alphabet should only contain an empty string"
+        );
         assert!(
             nfa.transition_fn.is_empty(),
             "Transition fn should be empty"
@@ -200,7 +210,7 @@ mod tests {
     fn nfa_adding_symbol() {
         let nfa = prepare_nfa();
 
-        assert_eq!(vec!['\0', 'A', 'B', 'C'], nfa.alphabet);
+        assert_eq!(vec![EMPTY_STRING, 'A', 'B', 'C'], nfa.alphabet);
     }
 
     #[test]
@@ -209,7 +219,7 @@ mod tests {
 
         nfa.remove_symbol('B');
 
-        assert_eq!(vec!['\0', 'A', 'C'], nfa.alphabet);
+        assert_eq!(vec![EMPTY_STRING, 'A', 'C'], nfa.alphabet);
     }
 
     #[test]
@@ -255,10 +265,10 @@ mod tests {
         first.add_state();
         first.add_symbol('A');
         first.add_symbol('B');
-        first.add_transition((0, '\0'), 1).unwrap();
+        first.add_transition((0, EMPTY_STRING), 1).unwrap();
         first.add_transition((0, 'A'), 0).unwrap();
         first.add_transition((0, 'B'), 2).unwrap();
-        first.add_transition((1, '\0'), 2).unwrap();
+        first.add_transition((1, EMPTY_STRING), 2).unwrap();
         first.add_transition((1, 'A'), 0).unwrap();
         first.add_transition((2, 'A'), 2).unwrap();
         println!("first: {:?}", first.transition_fn);
@@ -270,16 +280,31 @@ mod tests {
         second.add_transition((0, 'A'), 1).unwrap();
         second.add_transition((1, 'B'), 2).unwrap();
         second.add_transition((2, 'B'), 0).unwrap();
-        second.add_transition((2, '\0'), 1).unwrap();
+        second.add_transition((2, EMPTY_STRING), 1).unwrap();
         println!("second: {:?}", second.transition_fn);
 
-        first.concat(&second).expect("The concat method crashed");
-        assert_eq!(vec![0, 1, 2, 3, 4, 5], first.states, "The number of states is wrong when concatenating");
-        assert_eq!(vec!['\0', 'A', 'B'], first.alphabet, "The alphabet symbols don't match");
-        assert_eq!(vec![3], *first.transition_fn.get(&(2, '\0')).unwrap(), "An empty string transition is missing between the nfas");
+        first
+            .concat(*first.states.last().unwrap(), &second)
+            .expect("The concat method crashed");
+
+        assert_eq!(
+            vec![0, 1, 2, 3, 4, 5],
+            first.states,
+            "The number of states is wrong when concatenating"
+        );
+        assert_eq!(
+            vec![EMPTY_STRING, 'A', 'B'],
+            first.alphabet,
+            "The alphabet symbols don't match"
+        );
+        assert_eq!(
+            vec![3],
+            *first.transition_fn.get(&(2, EMPTY_STRING)).unwrap(),
+            "An empty string transition is missing between the nfas"
+        );
         assert_eq!(vec![4], *first.transition_fn.get(&(3, 'A')).unwrap());
         assert_eq!(vec![5], *first.transition_fn.get(&(4, 'B')).unwrap());
-        assert_eq!(vec![4], *first.transition_fn.get(&(5, '\0')).unwrap());
+        assert_eq!(vec![4], *first.transition_fn.get(&(5, EMPTY_STRING)).unwrap());
         assert_eq!(vec![3], *first.transition_fn.get(&(5, 'B')).unwrap());
         println!("result: {:?}", first.transition_fn);
     }
