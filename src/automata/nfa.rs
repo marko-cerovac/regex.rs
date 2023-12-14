@@ -3,12 +3,13 @@ use std::default::Default;
 
 const EMPTY_STRING: char = '\0';
 
+#[allow(dead_code)] // TODO: remove
 #[derive(Debug)]
 pub struct Nfa {
     states: Vec<u32>,
     alphabet: Vec<char>,
     transition_fn: HashMap<(u32, char), Vec<u32>>,
-    start_state: u32,
+    // start_state: u32,
     accept_states: Vec<u32>,
 }
 
@@ -18,14 +19,15 @@ impl Default for Nfa {
             states: vec![0],
             alphabet: vec![EMPTY_STRING],
             transition_fn: HashMap::new(),
-            start_state: 0,
+            // start_state: 0,
             accept_states: Vec::new(),
         }
     }
 }
 
+#[allow(dead_code)] // TODO: remove
 impl Nfa {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Nfa::default()
     }
 
@@ -182,7 +184,7 @@ mod tests {
             nfa.transition_fn.is_empty(),
             "Transition fn should be empty"
         );
-        assert_eq!(0, nfa.start_state, "Start state should be set to zero");
+        // assert_eq!(0, nfa.start_state, "Start state should be set to zero");
         assert!(
             nfa.accept_states.is_empty(),
             "Accept states set should be empty"
