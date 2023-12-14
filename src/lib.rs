@@ -1,4 +1,5 @@
-mod automata;
+pub mod language;
+pub mod automata;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
