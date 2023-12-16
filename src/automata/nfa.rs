@@ -27,6 +27,30 @@ impl Default for Nfa {
 
 #[allow(dead_code)] // TODO: remove
 impl Nfa {
+    pub fn construct(regex: &str) -> Self {
+        let mut nfa = Nfa::new();
+
+        for token in regex.chars() {
+            match token {
+                '(' => todo!("Implemet"),
+                ')' => todo!("Implemet"),
+                '|' => todo!("Implemet"),
+                '*' => todo!("Implemet"),
+                symbol => {
+                    let source_state = nfa.last_added_state();
+                    nfa.add_state();
+                    nfa.add_symbol(symbol);
+                    let target_state = nfa.last_added_state();
+
+                    nfa.add_transition((source_state, symbol), target_state)
+                        .unwrap();
+                }
+            }
+        }
+        nfa.add_accept_state(nfa.last_added_state());
+        nfa
+    }
+
     fn new() -> Self {
         Nfa::default()
     }
@@ -41,6 +65,15 @@ impl Nfa {
             return;
         }
         self.states.pop();
+    }
+
+    #[inline]
+    fn last_added_state(&self) -> u32 {
+        *self.states.last().unwrap()
+    }
+
+    fn num_states(&self) -> usize {
+        self.states.len()
     }
 
     fn add_symbol(&mut self, symbol: char) {
@@ -95,9 +128,14 @@ impl Nfa {
         }
     }
 
+    fn get_transition(&self, key: (u32, char)) -> Option<&Vec<u32>> {
+        self.transition_fn.get(&key)
+    }
+
     fn add_accept_state(&mut self, state: u32) {
         if self.states.contains(&state) {
             self.accept_states.push(state);
+            self.accept_states.sort();
         }
     }
 
@@ -109,36 +147,83 @@ impl Nfa {
         }
     }
 
-    fn concat(&mut self, root: u32, other: &Self) -> Result<(), &'static str> {
+    // metoda inkrementuje nazive stanja za neki broj increment
+    fn increment_states(&mut self, increment: u32) {
+        let mut lookup_table: HashMap<(u32, char), Vec<u32>> = HashMap::new();
+
+        // inkrementuj imena u skupovima stanja i finalnih stanja
+        self.states.iter_mut().for_each(|e| *e += increment);
+        self.accept_states.iter_mut().for_each(|e| *e += increment);
+
+        // iskopiraj trenutnu tabelu tranzicija u privremenu lookup tablue
+        // (zbog borrow checker-a)
+        // u novoj tabeli uvecaj stanja u k,v parovima za inkrement
+        self.transition_fn.iter().for_each(|(key, value)| {
+            lookup_table.insert((key.0 + increment, key.1), value.clone());
+        });
+
+        for entry in lookup_table.iter_mut() {
+            entry.1.iter_mut().for_each(|e| *e += increment);
+        }
+        // pomjeri lookup tabelu u svoju tablue
+        self.transition_fn = lookup_table;
+    }
+
+    // konkatenacija krugog automata stanja na trenutni
+    fn concat(&mut self, root: u32, other: &mut Self) -> Result<(), &'static str> {
         if !self.states.contains(&root) {
             return Err("Can not add to a state that doesn't exist");
         }
 
-        let increment = *self.states.last().unwrap() + 1;
-
-        for _ in other.states.iter() {
-            self.add_state()
-        }
-
+        // dodaj alfabet na svoj
         for symbol in other.alphabet.iter() {
             if !self.alphabet.contains(symbol) {
                 self.alphabet.push(*symbol);
             }
         }
 
+        // uvecaj imena njegovih stanja za broj svojih stanja + 1
+        let increment = self.last_added_state() + 1;
+        other.increment_states(increment);
+
+        // dodaj sebi nova stanja
+        for _ in 0..other.num_states() {
+            self.add_state()
+        }
+
+        // dodaj njegove tranzicije u svoju tabelu
         for entry in other.transition_fn.iter() {
             for state in entry.1 {
-                self.add_transition((entry.0 .0 + increment, entry.0 .1), *state + increment)?;
+                self.add_transition((entry.0 .0, entry.0 .1), *state)?;
             }
         }
 
-        for state in other.accept_states.iter() {
-            if !self.accept_states.contains(state) {
-                self.accept_states.push(*state);
-            }
-        }
+        // zaboravi svoja finalna stanja
+        // dodaj njegova finalna stanja u svoja
+        self.accept_states.clear();
+        other
+            .accept_states
+            .iter()
+            .for_each(|&e| self.accept_states.push(e));
 
+        // dodaj tranziciju sa praznim stringom izmedju
         self.add_transition((root, EMPTY_STRING), increment)?;
+
+        Ok(())
+    }
+
+    fn kleene_star(&mut self) -> Result<(), &'static str> {
+        // dodaj novo finalno stanje na pocetku
+        self.increment_states(1);
+        self.states.insert(0, 0);
+        self.add_accept_state(0);
+
+        // dodaj praznu tranziciju od svih finalnih stanja
+        // u prethodno prvo stanje
+        let temp = self.accept_states.clone();
+        temp.iter().for_each(|e| {
+            self.add_transition((*e, EMPTY_STRING), 1).unwrap();
+        });
 
         Ok(())
     }
@@ -167,6 +252,8 @@ mod tests {
         nfa.add_transition((2, 'B'), 3).unwrap();
         nfa.add_transition((2, 'B'), 1).unwrap();
 
+        nfa.add_accept_state(3);
+
         nfa
     }
 
@@ -189,6 +276,18 @@ mod tests {
             nfa.accept_states.is_empty(),
             "Accept states set should be empty"
         );
+    }
+
+    #[test]
+    fn nfa_construction() {
+        let nfa = Nfa::construct("abcde");
+
+        assert_eq!(vec![0, 1, 2, 3, 4, 5], nfa.states);
+        assert_eq!(vec![1], *nfa.get_transition((0, 'a')).unwrap());
+        assert_eq!(vec![2], *nfa.get_transition((1, 'b')).unwrap());
+        assert_eq!(vec![3], *nfa.get_transition((2, 'c')).unwrap());
+        assert_eq!(vec![4], *nfa.get_transition((3, 'd')).unwrap());
+        assert_eq!(vec![5], *nfa.get_transition((4, 'e')).unwrap());
     }
 
     #[test]
@@ -255,9 +354,9 @@ mod tests {
         nfa.add_accept_state(1);
         nfa.add_accept_state(2);
 
-        assert_eq!(vec![1, 2], nfa.accept_states);
+        assert_eq!(vec![1, 2, 3], nfa.accept_states);
     }
-
+    //fmsi-f03b88db8364b09e
     #[test]
     fn nfa_concat() {
         let mut first = Nfa::new();
@@ -286,7 +385,7 @@ mod tests {
         println!("second: {:?}", second.transition_fn);
 
         first
-            .concat(*first.states.last().unwrap(), &second)
+            .concat(*first.states.last().unwrap(), &mut second)
             .expect("The concat method crashed");
 
         assert_eq!(
@@ -306,8 +405,29 @@ mod tests {
         );
         assert_eq!(vec![4], *first.transition_fn.get(&(3, 'A')).unwrap());
         assert_eq!(vec![5], *first.transition_fn.get(&(4, 'B')).unwrap());
-        assert_eq!(vec![4], *first.transition_fn.get(&(5, EMPTY_STRING)).unwrap());
+        assert_eq!(
+            vec![4],
+            *first.transition_fn.get(&(5, EMPTY_STRING)).unwrap()
+        );
         assert_eq!(vec![3], *first.transition_fn.get(&(5, 'B')).unwrap());
         println!("result: {:?}", first.transition_fn);
+    }
+
+    #[test]
+    fn nfa_kleene_star() {
+        let mut nfa = prepare_nfa();
+        nfa.kleene_star().expect("Kleene star method failed");
+
+        assert_eq!(vec![0, 1, 2, 3, 4], nfa.states, "States set is not correct");
+        assert_eq!(
+            vec![0, 4],
+            nfa.accept_states,
+            "Accept states is not correct"
+        );
+
+        assert_eq!(vec![1], *nfa.transition_fn.get(&(0, EMPTY_STRING)).unwrap());
+        assert_eq!(vec![1], *nfa.transition_fn.get(&(4, EMPTY_STRING)).unwrap());
+        assert_eq!(vec![1, 2], *nfa.transition_fn.get(&(1, 'A')).unwrap());
+        assert_eq!(vec![2, 4], *nfa.transition_fn.get(&(3, 'B')).unwrap());
     }
 }

@@ -1,0 +1,6 @@
+* Operacije koje trebaju biti podrzane su:
+
+  - *konkatencija*
+  - *unija* |
+  - *kleenova zvijezda* *
+  - *grupisanje zagradama* ()
