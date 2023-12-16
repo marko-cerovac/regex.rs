@@ -72,6 +72,11 @@ impl Nfa {
         *self.states.last().unwrap()
     }
 
+    #[inline]
+    fn start_state(&self) -> u32 {
+        *self.states.first().unwrap()
+    }
+
     fn num_states(&self) -> usize {
         self.states.len()
     }
@@ -170,7 +175,7 @@ impl Nfa {
     }
 
     // konkatenacija krugog automata stanja na trenutni
-    fn concat(&mut self, root: u32, other: &mut Self) -> Result<(), &'static str> {
+    fn concat(&mut self, root: u32, mut other: Self) -> Result<(), &'static str> {
         if !self.states.contains(&root) {
             return Err("Can not add to a state that doesn't exist");
         }
@@ -224,6 +229,44 @@ impl Nfa {
         temp.iter().for_each(|e| {
             self.add_transition((*e, EMPTY_STRING), 1).unwrap();
         });
+
+        Ok(())
+    }
+
+    fn union(&mut self, mut other: Self) -> Result<(), &'static str> {
+        self.increment_states(1);
+        self.states.insert(0, 0);
+
+        other.increment_states(
+            u32::try_from(self.num_states())
+                .expect("Failed conversion from usize to u32 when creating a union"),
+        );
+
+        let other_start_state = other.start_state();
+
+        for _ in 0..other.num_states() {
+            self.add_state();
+        }
+
+        // dodaj tranzicije na svoje
+        for entry in other.transition_fn {
+            self.transition_fn.insert(entry.0, entry.1);
+        }
+
+        // dodaj finalna stanja na svoja
+        other.accept_states.iter().for_each(|&e| self.add_accept_state(e));
+
+        // dodaj alfabet na svoj
+        for symbol in other.alphabet.iter() {
+            if !self.alphabet.contains(symbol) {
+                self.alphabet.push(*symbol);
+            }
+        }
+
+        // povezi novo pocetno stanje sa
+        // proslim pocetnim stanjima
+        self.add_transition((0, EMPTY_STRING), 1)?;
+        self.add_transition((0, EMPTY_STRING), other_start_state)?;
 
         Ok(())
     }
@@ -356,7 +399,7 @@ mod tests {
 
         assert_eq!(vec![1, 2, 3], nfa.accept_states);
     }
-    //fmsi-f03b88db8364b09e
+
     #[test]
     fn nfa_concat() {
         let mut first = Nfa::new();
@@ -385,7 +428,7 @@ mod tests {
         println!("second: {:?}", second.transition_fn);
 
         first
-            .concat(*first.states.last().unwrap(), &mut second)
+            .concat(*first.states.last().unwrap(), second)
             .expect("The concat method crashed");
 
         assert_eq!(
@@ -429,5 +472,34 @@ mod tests {
         assert_eq!(vec![1], *nfa.transition_fn.get(&(4, EMPTY_STRING)).unwrap());
         assert_eq!(vec![1, 2], *nfa.transition_fn.get(&(1, 'A')).unwrap());
         assert_eq!(vec![2, 4], *nfa.transition_fn.get(&(3, 'B')).unwrap());
+    }
+
+    #[test]
+    fn nfa_union() {
+        let mut first = Nfa::new();
+        let mut second = Nfa::new();
+
+        first.add_state();
+        first.add_state();
+        first.add_state();
+        first.add_symbol('a');
+        first.add_symbol('b');
+        first.add_transition((0, 'a'), 1).unwrap();
+        first.add_transition((1, EMPTY_STRING), 2).unwrap();
+        first.add_transition((2, 'b'), 3).unwrap();
+        first.add_accept_state(3);
+
+        second.add_state();
+        second.add_symbol('a');
+        second.add_transition((0, 'a'), 1).unwrap();
+        second.add_accept_state(1);
+
+        first.union(second).unwrap();
+        
+        assert_eq!(vec![0, 1, 2, 3, 4, 5, 6], first.states);
+        assert_eq!(vec![1, 5], *first.transition_fn.get(&(0, EMPTY_STRING)).unwrap());
+        assert_eq!(vec![4], *first.transition_fn.get(&(3, 'b')).unwrap());
+        assert_eq!(vec![6], *first.transition_fn.get(&(5, 'a')).unwrap());
+        assert_eq!(vec![4, 6], first.accept_states);
     }
 }
