@@ -1,2 +1,2 @@
 pub mod automata;
-// pub mod language;
+pub mod language;

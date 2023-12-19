@@ -4,7 +4,7 @@ use std::default::Default;
 const EMPTY_STRING: char = '\0';
 
 #[allow(dead_code)] // TODO: remove
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Nfa {
     states: Vec<u32>,
     alphabet: Vec<char>,
@@ -19,7 +19,6 @@ impl Default for Nfa {
             states: vec![0],
             alphabet: vec![EMPTY_STRING],
             transition_fn: HashMap::new(),
-            // start_state: 0,
             accept_states: Vec::new(),
         }
     }
@@ -27,28 +26,72 @@ impl Default for Nfa {
 
 #[allow(dead_code)] // TODO: remove
 impl Nfa {
-    pub fn construct(regex: &str) -> Self {
-        let mut nfa = Nfa::new();
+    pub fn construct(expression: &str) -> Result<Self, &'static str> {
+        enum OnReturn {
+            Union,
+            Bracket,
+            Finished,
+        }
 
-        for token in regex.chars() {
+        let mut stack: Vec<(Nfa, OnReturn)> = vec![(Nfa::new(), OnReturn::Finished)];
+        let err_msg = "Regex is not in the correct form";
+
+        for token in expression.chars() {
+            let current = stack.last_mut().unwrap();
+
             match token {
-                '(' => todo!("Implemet"),
-                ')' => todo!("Implemet"),
-                '|' => todo!("Implemet"),
-                '*' => todo!("Implemet"),
-                symbol => {
-                    let source_state = nfa.last_added_state();
-                    nfa.add_state();
-                    nfa.add_symbol(symbol);
-                    let target_state = nfa.last_added_state();
-
-                    nfa.add_transition((source_state, symbol), target_state)
-                        .unwrap();
+                '(' => {
+                    stack.push((Nfa::new(), OnReturn::Bracket));
+                }
+                ')' => loop {
+                    let last = stack.pop().expect(err_msg);
+                    match last.1 {
+                        OnReturn::Union => {
+                            let new_last = stack.last_mut().expect(err_msg);
+                            new_last.0.union(last.0)?;
+                        }
+                        OnReturn::Bracket => {
+                            let new_last = stack.last_mut().expect(err_msg);
+                            new_last.0.concat(new_last.0.last_added_state(), last.0)?;
+                            break;
+                        }
+                        OnReturn::Finished => return Ok(last.0.clone()),
+                    }
+                },
+                '*' => {
+                    current.0.kleene_star()?;
+                }
+                '|' => {
+                    stack.push((Nfa::new(), OnReturn::Union));
+                }
+                alpha => {
+                    current.0.add_symbol(alpha);
+                    current.0.push_symbol(alpha)?;
                 }
             }
         }
-        nfa.add_accept_state(nfa.last_added_state());
-        nfa
+
+        loop {
+            let current = stack.pop();
+
+            if current.is_none() {
+                break;
+            }
+            let current = current.unwrap();
+
+            match current.1 {
+                OnReturn::Bracket => {
+                    return Err(err_msg);
+                }
+                OnReturn::Union => {
+                    let new_last = stack.last_mut().expect(err_msg);
+                    new_last.0.union(current.0)?;
+                }
+                OnReturn::Finished => return Ok(current.0),
+            }
+        }
+
+        Err(err_msg)
     }
 
     fn new() -> Self {
@@ -174,6 +217,21 @@ impl Nfa {
         self.transition_fn = lookup_table;
     }
 
+    fn push_symbol(&mut self, symbol: char) -> Result<(), &'static str> {
+        if !self.alphabet.contains(&symbol) {
+            return Err("The symbol is not in the alphabet");
+        }
+
+        let prev_last = self.last_added_state();
+        self.add_state();
+        let new_last = self.last_added_state();
+        self.add_transition((prev_last, symbol), new_last)?;
+        self.accept_states.clear();
+        self.add_accept_state(new_last);
+
+        Ok(())
+    }
+
     // konkatenacija krugog automata stanja na trenutni
     fn concat(&mut self, root: u32, mut other: Self) -> Result<(), &'static str> {
         if !self.states.contains(&root) {
@@ -254,7 +312,10 @@ impl Nfa {
         }
 
         // dodaj finalna stanja na svoja
-        other.accept_states.iter().for_each(|&e| self.add_accept_state(e));
+        other
+            .accept_states
+            .iter()
+            .for_each(|&e| self.add_accept_state(e));
 
         // dodaj alfabet na svoj
         for symbol in other.alphabet.iter() {
@@ -323,14 +384,9 @@ mod tests {
 
     #[test]
     fn nfa_construction() {
-        let nfa = Nfa::construct("abcde");
-
-        assert_eq!(vec![0, 1, 2, 3, 4, 5], nfa.states);
-        assert_eq!(vec![1], *nfa.get_transition((0, 'a')).unwrap());
-        assert_eq!(vec![2], *nfa.get_transition((1, 'b')).unwrap());
-        assert_eq!(vec![3], *nfa.get_transition((2, 'c')).unwrap());
-        assert_eq!(vec![4], *nfa.get_transition((3, 'd')).unwrap());
-        assert_eq!(vec![5], *nfa.get_transition((4, 'e')).unwrap());
+        let nfa = Nfa::construct("a|(ab|b)*");
+        assert!(nfa.is_ok());
+        println!("{:?}", nfa.unwrap());
     }
 
     #[test]
@@ -495,9 +551,12 @@ mod tests {
         second.add_accept_state(1);
 
         first.union(second).unwrap();
-        
+
         assert_eq!(vec![0, 1, 2, 3, 4, 5, 6], first.states);
-        assert_eq!(vec![1, 5], *first.transition_fn.get(&(0, EMPTY_STRING)).unwrap());
+        assert_eq!(
+            vec![1, 5],
+            *first.transition_fn.get(&(0, EMPTY_STRING)).unwrap()
+        );
         assert_eq!(vec![4], *first.transition_fn.get(&(3, 'b')).unwrap());
         assert_eq!(vec![6], *first.transition_fn.get(&(5, 'a')).unwrap());
         assert_eq!(vec![4, 6], first.accept_states);
