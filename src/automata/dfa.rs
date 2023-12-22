@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::default::Default;
 
+#[allow(dead_code)] // TODO: remove
 #[derive(Debug)]
 pub struct Dfa {
     states: Vec<u32>,
@@ -22,8 +23,9 @@ impl Default for Dfa {
     }
 }
 
+#[allow(dead_code)] // TODO: remove
 impl Dfa {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Default::default()
     }
 
@@ -105,7 +107,7 @@ impl Dfa {
 
     fn remove_accept_state(&mut self, state: u32) {
         if let Some(index) = self.accept_states.iter().position(|&e| e == state) {
-                self.accept_states.remove(index);
+            self.accept_states.remove(index);
         }
     }
 
@@ -137,6 +139,7 @@ impl Dfa {
 
         Ok(self.accept_states.contains(current_state))
     }
+
 }
 
 #[cfg(test)]
@@ -150,5 +153,4 @@ mod tests {
         assert_eq!(vec![0], dfa.states);
         assert_eq!(0, dfa.start_state);
     }
-
 }
