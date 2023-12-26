@@ -1,7 +1,8 @@
 mod operators;
 
-use crate::util;
+use super::dfa::Dfa;
 use crate::language::EMPTY_STRING;
+use crate::util;
 use std::collections::HashMap;
 use std::default::Default;
 
@@ -55,8 +56,7 @@ impl Nfa {
                         }
                         OnReturn::Bracket => {
                             let new_last = stack.last_mut().expect(err_msg);
-                            let root = new_last.0.last_added_state();
-                            operators::concat(&mut new_last.0, last.0, root)?;
+                            operators::concat(&mut new_last.0, last.0)?;
                             break;
                         }
                         OnReturn::Finished => return Ok(last.0.clone()),
@@ -112,6 +112,10 @@ impl Nfa {
             return;
         }
         self.states.pop();
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.states.len() == 1
     }
 
     #[inline]
@@ -269,20 +273,38 @@ impl Nfa {
         let prev_last = self.last_added_state();
         self.add_state();
         let new_last = self.last_added_state();
-        self.add_transition((prev_last, symbol), new_last)?;
-        self.accept_states.clear();
+
+        if self.accept_states.is_empty() {
+            self.add_transition((prev_last, symbol), new_last)?;
+        } else {
+            for state in self.accept_states.clone() {
+                self.add_transition((state, symbol), new_last)?;
+            }
+            self.accept_states.clear();
+        }
         self.add_accept_state(new_last);
 
         Ok(())
     }
 
-    // pub fn to_dfa(&self) -> Dfa {
-    //     let dfa = Dfa::new();
-    //
-    //     let powerset = util::create_power_set(&self.states);
-    //
-    //     dfa
-    // }
+    pub fn to_dfa(&self) -> Dfa {
+        let dfa = Dfa::new();
+
+        let new_states = util::create_power_set(&self.states);
+        let mut new_accept_states: Vec<Vec<u32>> = Vec::new();
+
+        // populate the accept states vec
+        new_states.iter().for_each(|new_state| {
+            if new_state
+                .iter()
+                .any(|state| self.accept_states.contains(state))
+            {
+                new_accept_states.push(new_state.clone());
+            }
+        });
+
+        dfa
+    }
 }
 
 pub mod test_utils {
@@ -342,24 +364,25 @@ mod tests {
 
     #[test]
     fn nfa_construction() {
-        // regex: "a|(ab|b)*"
+        // regex: "a|(ab|b)*
         // {
-        //   states: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        //   alphabet: ['\0', 'a', 'b'],
-        //   transition_fn: {
-        //     (8, '\0'): [4],
-        //     (4, '\0'): [5],
-        //     (3, '\0'): [4],
-        //     (0, '\0'): [1, 3],
-        //     (5, '\0'): [6, 9],
-        //     (6, 'a'): [7],
-        //     (9, 'b'): [10],
-        //     (7, 'b'): [8],
-        //     (1, 'a') : [2],
-        //     (10, '\0'): [4]}
+        //     states: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        //     alphabet: ['\0', 'a', 'b'],
+        //     transition_fn: {
+        //         (8, '\0'): [4],
+        //         (10, '\0'): [4],
+        //         (0, '\0'): [1, 3],
+        //         (7, 'b' ): [8],
+        //         (9, 'b'): [10],
+        //         (5, '\0'): [6, 9],
+        //         (1, 'a'): [2],
+        //         (3, '\0'): [4],
+        //         (6,'a'): [7]
+        //     },
         //     accept_states: [2, 3, 8, 10]
         // }
         let nfa = Nfa::from("a|(ab|b)*");
+        println!("{:?}", nfa);
 
         let nfa = match nfa {
             Ok(result) => result,
@@ -371,16 +394,16 @@ mod tests {
         assert_eq!(vec![2, 3, 8, 10], nfa.accept_states);
 
         let mut map: HashMap<(u32, char), Vec<u32>> = HashMap::new();
-        map.insert((10, EMPTY_STRING), vec![4]);
-        map.insert((8, EMPTY_STRING), vec![4]);
-        map.insert((4, EMPTY_STRING), vec![5]);
-        map.insert((3, EMPTY_STRING), vec![4]);
         map.insert((0, EMPTY_STRING), vec![1, 3]);
+        map.insert((1, 'a'), vec![2]);
+        map.insert((3, EMPTY_STRING), vec![4]);
+        map.insert((4, EMPTY_STRING), vec![5]);
         map.insert((5, EMPTY_STRING), vec![6, 9]);
         map.insert((6, 'a'), vec![7]);
-        map.insert((9, 'b'), vec![10]);
         map.insert((7, 'b'), vec![8]);
-        map.insert((1, 'a'), vec![2]);
+        map.insert((8, EMPTY_STRING), vec![4]);
+        map.insert((9, 'b'), vec![10]);
+        map.insert((10, EMPTY_STRING), vec![4]);
 
         for (key, value) in map.iter() {
             if nfa.transition_fn.get(key).unwrap() != value {
