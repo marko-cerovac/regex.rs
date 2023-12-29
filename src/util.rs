@@ -1,5 +1,5 @@
 use crate::language::EMPTY_STRING;
-use crate::nfa::Nfa;
+use crate::nfa::*;
 use itertools::Itertools;
 use std::collections::vec_deque::VecDeque;
 
@@ -142,6 +142,38 @@ pub fn set_epsilon_clojure(nfa: &Nfa, set: &[u32]) -> Vec<u32> {
     clojure
 }
 
+/// Returns a set to which a given set transitions to
+/// for a given symbol.
+///
+/// # Example
+/// ```rust
+/// use fmsi::nfa::Nfa;
+/// use fmsi::util::set_transitions;
+///
+/// let nfa = Nfa::from("a|(ab|b)*").unwrap();
+/// let result = set_transitions(&nfa, &[7, 9], 'b');
+///
+/// assert_eq!(vec![8, 10], result);
+/// ```
+pub fn set_transitions(nfa: &Nfa, set: &[u32], symbol: char) -> Vec<u32> {
+    let mut target: Vec<u32> = Vec::new();
+
+    for state in set {
+        if let Some(destinations) = nfa.get_transition((*state, symbol)) {
+            let mut to_add: Vec<u32> = destinations
+                .iter()
+                .filter(|&d| !target.contains(d))
+                .cloned()
+                .collect();
+
+            target.append(&mut to_add);
+        }
+    }
+
+    target.sort();
+    target
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,8 +223,25 @@ mod tests {
     fn nfa_set_epsilon_clojure() {
         let nfa = Nfa::from("a|(ab|b)*").unwrap();
 
-        assert_eq!(vec![0, 1, 3, 4, 5, 6, 8, 9], set_epsilon_clojure(&nfa, &[0, 8]));
+        assert_eq!(
+            vec![0, 1, 3, 4, 5, 6, 8, 9],
+            set_epsilon_clojure(&nfa, &[0, 8])
+        );
+        assert_eq!(
+            vec![0, 1, 3, 4, 5, 6, 8, 9],
+            set_epsilon_clojure(&nfa, &[0, 1, 3, 4, 5, 6, 8, 9])
+        );
         assert_eq!(vec![4, 5, 6, 9], set_epsilon_clojure(&nfa, &[4, 5]));
         assert_eq!(vec![1, 6], set_epsilon_clojure(&nfa, &[1, 6]));
+    }
+
+    #[test]
+    fn nfa_set_transitions() {
+        let nfa = Nfa::from("a|(ab|b)*").unwrap();
+        let empty: Vec<u32> = Vec::new();
+
+        assert_eq!(vec![8, 10], set_transitions(&nfa, &[7, 9], 'b'));
+        assert_eq!(vec![2, 7], set_transitions(&nfa, &[1, 6], 'a'));
+        assert_eq!(empty, set_transitions(&nfa, &[0, 3, 4], 'a'));
     }
 }

@@ -1,11 +1,11 @@
 mod operators;
 
 use super::dfa::Dfa;
-use crate::automata::iters::*;
+pub use crate::automata::iters::*;
 use crate::automata::traits::*;
 use crate::language::EMPTY_STRING;
 use crate::util;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::default::Default;
 
 #[allow(dead_code)] // TODO: remove
@@ -97,6 +97,46 @@ impl StateIter for Nfa {
     }
 }
 
+impl Transition for Nfa {
+    fn add_transition(&mut self, source: &(u32, char), target: u32) -> Result<(), &'static str> {
+        if !self.states.contains(&source.0) {
+            return Err("Source state is not a valid state");
+        }
+        if !self.alphabet.contains(&source.1) {
+            return Err("Transition symbol is not in the alphabet");
+        }
+        if !self.states.contains(&target) {
+            return Err("Destination state is not a valid state");
+        }
+
+        match self.transition_fn.get_mut(source) {
+            Some(destinations) => {
+                if !destinations.contains(&target) {
+                    destinations.push(target);
+                    destinations.sort();
+                }
+            }
+            None => {
+                self.transition_fn.insert(*source, vec![target]);
+            }
+        }
+
+        Ok(())
+    }
+    //
+    // fn remove_transition(&mut self, source: &(u32, char), target: u32) {
+    //     if let Some(destinations) = self.transition_fn.get_mut(source) {
+    //         if let Some(index) = destinations.iter().position(|&e| e == target) {
+    //             destinations.remove(index);
+    //
+    //             if destinations.is_empty() {
+    //                 self.transition_fn.remove(source);
+    //             }
+    //         }
+    //     }
+    // }
+}
+
 impl AlphabetIter for Nfa {
     #[inline]
     fn alphabet_iter(&self) -> impl Iterator<Item = &char> {
@@ -106,6 +146,24 @@ impl AlphabetIter for Nfa {
     #[inline]
     fn alphabet_iter_mut(&mut self) -> impl Iterator<Item = &mut char> {
         self.alphabet.iter_mut()
+    }
+}
+
+impl TransitionIter for Nfa {
+    type Target = Vec<u32>;
+
+    #[inline]
+    fn transitions_iter(&self) -> impl Iterator<Item = (&(u32, char), &Vec<u32>)> {
+        self.transition_fn.iter()
+    }
+
+    #[inline]
+    fn transitions_iter_mut(&mut self) -> impl Iterator<Item = (&(u32, char), &mut Vec<u32>)> {
+        self.transition_fn.iter_mut()
+    }
+
+    fn get_transition(&self, key: (u32, char)) -> Option<&Vec<u32>> {
+        self.transition_fn.get(&key)
     }
 }
 
@@ -186,16 +244,6 @@ impl Nfa {
     }
 
     #[inline]
-    pub fn transitions_iter(&self) -> impl Iterator<Item = (&(u32, char), &Vec<u32>)> {
-        self.transition_fn.iter()
-    }
-
-    #[inline]
-    pub fn transitions_iter_mut(&mut self) -> impl Iterator<Item = (&(u32, char), &mut Vec<u32>)> {
-        self.transition_fn.iter_mut()
-    }
-
-    #[inline]
     pub fn last_added_state(&self) -> u32 {
         *self.states.last().unwrap()
     }
@@ -207,48 +255,6 @@ impl Nfa {
 
     pub fn num_states(&self) -> usize {
         self.states.len()
-    }
-
-    fn add_transition(&mut self, source: &(u32, char), target: u32) -> Result<(), &'static str> {
-        if !self.states.contains(&source.0) {
-            return Err("Source state is not a valid state");
-        }
-        if !self.alphabet.contains(&source.1) {
-            return Err("Transition symbol is not in the alphabet");
-        }
-        if !self.states.contains(&target) {
-            return Err("Destination state is not a valid state");
-        }
-
-        match self.transition_fn.get_mut(source) {
-            Some(destinations) => {
-                if !destinations.contains(&target) {
-                    destinations.push(target);
-                    destinations.sort();
-                }
-            }
-            None => {
-                self.transition_fn.insert(*source, vec![target]);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn remove_transition(&mut self, source: &(u32, char), target: u32) {
-        if let Some(destinations) = self.transition_fn.get_mut(source) {
-            if let Some(index) = destinations.iter().position(|&e| e == target) {
-                destinations.remove(index);
-
-                if destinations.is_empty() {
-                    self.transition_fn.remove(source);
-                }
-            }
-        }
-    }
-
-    pub fn get_transition(&self, key: (u32, char)) -> Option<&Vec<u32>> {
-        self.transition_fn.get(&key)
     }
 
     // metoda inkrementuje nazive stanja za neki broj increment
@@ -271,6 +277,10 @@ impl Nfa {
         }
         // pomjeri lookup tabelu u svoju tablue
         self.transition_fn = lookup_table;
+    }
+
+    fn is_accept_state(&self, state: u32) -> bool {
+        self.accept_states.contains(&state)
     }
 
     fn push_symbol(&mut self, symbol: char) -> Result<(), &'static str> {
@@ -296,20 +306,75 @@ impl Nfa {
     }
 
     pub fn to_dfa(&self) -> Dfa {
-        let dfa = Dfa::new();
+        let mut dfa = Dfa::new();
+        let mut queue: VecDeque<Vec<u32>> = VecDeque::new();
+        let mut new_states: Vec<Vec<u32>> = Vec::new();
+        let mut new_transitions: HashMap<(Vec<u32>, char), Vec<u32>> = HashMap::new();
+        let new_alphabet: Vec<char> = self
+            .alphabet
+            .iter()
+            .filter(|&s| *s != EMPTY_STRING)
+            .cloned()
+            .collect();
 
-        let new_states = util::create_power_set(&self.states);
-        let mut new_accept_states: Vec<Vec<u32>> = Vec::new();
+        // add the epsilon clojure of the start state to the new_states and the queue
+        new_states.push(util::state_epsilon_clojure(self, self.start_state()));
+        queue.push_back(new_states.first().unwrap().clone());
 
-        // populate the accept states vec
-        new_states.iter().for_each(|new_state| {
-            if new_state
-                .iter()
-                .any(|state| self.accept_states.contains(state))
-            {
-                new_accept_states.push(new_state.clone());
+        loop {
+            let current = queue.pop_front();
+
+            match current {
+                Some(current) => {
+                    // for every symbol in the alphabet
+                    for symbol in new_alphabet.iter() {
+                        // get every state that can be transitioned to
+                        // from the current set of states
+                        // and calculate an epsilon clojure on it
+                        let new_tr = util::set_transitions(self, &current, *symbol);
+                        let new_tr = util::set_epsilon_clojure(self, &new_tr);
+
+                        // push it to the queue if it wasn't there already
+                        if !queue.contains(&new_tr) && !new_states.contains(&new_tr) {
+                            queue.push_back(new_tr.clone());
+                        }
+
+                        // insert the transition for it
+                        new_transitions.insert((current.clone(), *symbol), new_tr.clone());
+
+                        // if it's a new state, add it to the set of state sets
+                        if !new_states.contains(&new_tr) {
+                            new_states.push(new_tr);
+                        }
+                    }
+                }
+                None => break,
             }
-        });
+        }
+
+        // lookup table used for translating state sets to states
+        let mut lookup_table: HashMap<&Vec<u32>, u32> = HashMap::new();
+        for (index, state) in new_states.iter().enumerate() {
+            lookup_table.insert(state, index as u32);
+            dfa.add_state();
+
+            if state.iter().any(|&state| self.is_accept_state(state)) {
+                dfa.add_accept_state(index as u32);
+            }
+        }
+        dfa.remove_state();
+
+        // add the alphabet to the dfa
+        new_alphabet.iter().for_each(|&s| dfa.add_symbol(s));
+
+        // add transitions to the dfa
+        for ((source, symbol), destination) in new_transitions.iter() {
+            let source = lookup_table.get(source).unwrap();
+            let destination = lookup_table.get(destination).unwrap();
+
+            dfa.add_transition(&(*source, *symbol), *destination).unwrap();
+
+        }
 
         dfa
     }
@@ -496,18 +561,18 @@ mod tests {
         assert_eq!(vec![1, 3], *nfa.transition_fn.get(&(2, 'B')).unwrap());
     }
 
-    #[test]
-    fn nfa_removing_transition() {
-        let mut nfa = test_utils::prepare_nfa();
-
-        nfa.remove_transition(&(0, 'A'), 1);
-        nfa.remove_transition(&(1, 'C'), 2);
-        nfa.remove_transition(&(2, 'B'), 1);
-
-        assert_eq!(vec![0], *nfa.transition_fn.get(&(0, 'A')).unwrap());
-        assert_eq!(Option::None, nfa.transition_fn.get(&(1, 'C')));
-        assert_eq!(vec![3], *nfa.transition_fn.get(&(2, 'B')).unwrap());
-    }
+    // #[test]
+    // fn nfa_removing_transition() {
+    //     let mut nfa = test_utils::prepare_nfa();
+    //
+    //     nfa.remove_transition(&(0, 'A'), 1);
+    //     nfa.remove_transition(&(1, 'C'), 2);
+    //     nfa.remove_transition(&(2, 'B'), 1);
+    //
+    //     assert_eq!(vec![0], *nfa.transition_fn.get(&(0, 'A')).unwrap());
+    //     assert_eq!(Option::None, nfa.transition_fn.get(&(1, 'C')));
+    //     assert_eq!(vec![3], *nfa.transition_fn.get(&(2, 'B')).unwrap());
+    // }
 
     #[test]
     fn nfa_adding_accept_states() {
@@ -517,5 +582,14 @@ mod tests {
         nfa.add_accept_state(2);
 
         assert_eq!(vec![1, 2, 3], nfa.accept_states);
+    }
+
+    #[test]
+    fn nfa_to_dfa() {
+        let nfa = Nfa::from("a|(ab|b)*").unwrap();
+        let dfa = nfa.to_dfa();
+
+        println!("{:?}", dfa);
+        assert!(dfa.is_complete());
     }
 }

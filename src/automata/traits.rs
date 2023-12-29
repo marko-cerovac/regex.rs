@@ -11,8 +11,6 @@ pub trait Alphabet {
 }
 
 pub trait Transition {
-    type Target;
-
     fn add_transition(&mut self, source: &(u32, char), target: u32) -> Result<(), &'static str>;
-    fn remove_transition(&mut self, source: &(u32, char), target: u32);
+    // fn remove_transition(&mut self, source: &(u32, char), target: u32);
 }

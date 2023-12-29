@@ -11,9 +11,10 @@ pub trait AlphabetIter {
     fn alphabet_iter_mut(&mut self) -> impl Iterator<Item = &mut char>;
 }
 
-// pub trait TransitionIter {
-//     type Target;
-//
-//     fn transitions_iter(&self) -> impl Iterator<Item = (&(u32, char), Self::Target)>;
-//     fn transitions_iter_mut(&mut self) -> impl Iterator<Item = (&(u32, char), Self::Target)>;
-// }
+pub trait TransitionIter {
+    type Target;
+
+    fn transitions_iter(&self) -> impl Iterator<Item = (&(u32, char), &Self::Target)>;
+    fn transitions_iter_mut(&mut self) -> impl Iterator<Item = (&(u32, char), &mut Self::Target)>;
+    fn get_transition(&self, key: (u32, char)) -> Option<&Self::Target>;
+}

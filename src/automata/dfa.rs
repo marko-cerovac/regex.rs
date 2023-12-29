@@ -76,18 +76,8 @@ impl Alphabet for Dfa {
     }
 }
 
-#[allow(dead_code)] // TODO: remove
-impl Dfa {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    #[inline]
-    fn start_state(&self) -> u32 {
-        *self.states.first().unwrap()
-    }
-
-    fn add_transition(&mut self, source: (u32, char), target: u32) -> Result<(), &'static str> {
+impl Transition for Dfa {
+    fn add_transition(&mut self, source: &(u32, char), target: u32) -> Result<(), &'static str> {
         if !self.states.contains(&source.0) {
             return Err("The source state isn't a valid state");
         }
@@ -100,17 +90,34 @@ impl Dfa {
             return Err("The symbol is not in the alphabet");
         }
 
-        if self.transition_fn.get(&source).is_some() {
+        if self.transition_fn.get(source).is_some() {
             return Err("The transition already exists");
         }
 
-        self.transition_fn.insert(source, target);
+        self.transition_fn.insert(*source, target);
 
         Ok(())
     }
+    //
+    // fn remove_transition(&mut self, source: &(u32, char), target: u32) {
+    //     self.transition_fn.remove(source);
+    // }
+}
+
+
+#[allow(dead_code)] // TODO: remove
+impl Dfa {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    #[inline]
+    fn start_state(&self) -> u32 {
+        *self.states.first().unwrap()
+    }
 
     /// Checks if self is complete.
-    fn is_complete(&self) -> bool {
+    pub fn is_complete(&self) -> bool {
         for state in self.states.iter() {
             for symbol in &self.alphabet {
                 if !self.transition_fn.contains_key(&(*state, *symbol)) {
