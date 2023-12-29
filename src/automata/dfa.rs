@@ -1,3 +1,5 @@
+// use crate::automata::iters::*;
+use crate::automata::traits::*;
 use std::collections::HashMap;
 use std::default::Default;
 
@@ -7,37 +9,31 @@ pub struct Dfa {
     states: Vec<u32>,
     alphabet: Vec<char>,
     transition_fn: HashMap<(u32, char), u32>,
-    start_state: u32,
     accept_states: Vec<u32>,
 }
 
 impl Default for Dfa {
     fn default() -> Self {
         Dfa {
-            states: vec![0], // pocetno stanje je 0
+            states: vec![0],
             alphabet: Vec::new(),
             transition_fn: HashMap::new(),
-            start_state: 0,
             accept_states: Vec::new(),
         }
     }
 }
 
-#[allow(dead_code)] // TODO: remove
-impl Dfa {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
+impl State for Dfa {
     fn add_state(&mut self) {
-        let current_largest = self.states.last().unwrap();
-        self.states.push(current_largest + 1);
+        self.states.push(self.states.last().unwrap() + 1)
     }
 
-    fn remove_state(&mut self, target: u32) {
-        if let Some(index) = self.states.iter().position(|&e| e == target) {
-            self.accept_states.remove(index);
+    fn remove_state(&mut self) {
+        if self.states.len() == 1 {
+            return;
         }
+
+        let target = self.states.pop().unwrap();
 
         if let Some(index) = self.accept_states.iter().position(|&e| e == target) {
             self.accept_states.remove(index);
@@ -49,6 +45,21 @@ impl Dfa {
             .retain(|&(curr_state, _), new_state| curr_state != target && *new_state != target);
     }
 
+    fn add_accept_state(&mut self, state: u32) {
+        if self.states.contains(&state) {
+            self.accept_states.push(state);
+            self.accept_states.sort();
+        }
+    }
+
+    fn remove_accept_state(&mut self, state: u32) {
+        if let Some(index) = self.accept_states.iter().position(|&e| e == state) {
+            self.accept_states.remove(index);
+        }
+    }
+}
+
+impl Alphabet for Dfa {
     fn add_symbol(&mut self, symbol: char) {
         if !self.alphabet.contains(&symbol) {
             self.alphabet.push(symbol);
@@ -59,6 +70,21 @@ impl Dfa {
         if let Some(position) = self.alphabet.iter().position(|e| *e == symbol) {
             self.alphabet.remove(position);
         }
+
+        self.transition_fn
+            .retain(|&(_, transition_symbol), _| transition_symbol != symbol);
+    }
+}
+
+#[allow(dead_code)] // TODO: remove
+impl Dfa {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    #[inline]
+    fn start_state(&self) -> u32 {
+        *self.states.first().unwrap()
     }
 
     fn add_transition(&mut self, source: (u32, char), target: u32) -> Result<(), &'static str> {
@@ -83,36 +109,7 @@ impl Dfa {
         Ok(())
     }
 
-    #[inline]
-    fn get_start_state(&self) -> u32 {
-        self.start_state
-    }
-
-    fn change_start_state(&mut self, new_start_state: u32) -> Result<(), &'static str> {
-        if self.states.contains(&new_start_state) {
-            self.start_state = new_start_state;
-            Ok(())
-        } else {
-            Err("The selected start state is not a valid state")
-        }
-    }
-
-    fn add_accept_state(&mut self, state: u32) -> Result<(), &'static str> {
-        if !self.states.contains(&state) {
-            return Err("The selected accept state is not a valid state");
-        }
-        self.accept_states.push(state);
-        Ok(())
-    }
-
-    fn remove_accept_state(&mut self, state: u32) {
-        if let Some(index) = self.accept_states.iter().position(|&e| e == state) {
-            self.accept_states.remove(index);
-        }
-    }
-
-    // funkcija provjerava da li je automat stanja
-    // konacan i deterministican
+    /// Checks if self is complete.
     fn is_complete(&self) -> bool {
         for state in self.states.iter() {
             for symbol in &self.alphabet {
@@ -125,7 +122,8 @@ impl Dfa {
         true
     }
 
-    // obracunava input i vraca 'true' ako zavrsi u finalnom stanju
+    /// Processes the given string and returns Ok(true) if it
+    /// ends up in an accept state.
     pub fn run(&self, input: &str) -> Result<bool, &'static str> {
         let mut current_state = self.states.first().unwrap();
 
@@ -138,19 +136,5 @@ impl Dfa {
         }
 
         Ok(self.accept_states.contains(current_state))
-    }
-
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn dfa_creation() {
-        let dfa = Dfa::new();
-
-        assert_eq!(vec![0], dfa.states);
-        assert_eq!(0, dfa.start_state);
     }
 }

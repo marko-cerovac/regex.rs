@@ -1,6 +1,8 @@
 mod operators;
 
 use super::dfa::Dfa;
+use crate::automata::iters::*;
+use crate::automata::traits::*;
 use crate::language::EMPTY_STRING;
 use crate::util;
 use std::collections::HashMap;
@@ -23,6 +25,87 @@ impl Default for Nfa {
             transition_fn: HashMap::new(),
             accept_states: Vec::new(),
         }
+    }
+}
+
+impl State for Nfa {
+    fn add_state(&mut self) {
+        let last = self.states.last().unwrap();
+        self.states.push(last + 1);
+    }
+
+    fn remove_state(&mut self) {
+        if *self.states.last().unwrap() == 0 {
+            return;
+        }
+        self.states.pop();
+    }
+
+    fn add_accept_state(&mut self, state: u32) {
+        if self.states.contains(&state) {
+            self.accept_states.push(state);
+            self.accept_states.sort();
+        }
+    }
+
+    fn remove_accept_state(&mut self, target: u32) {
+        if let Some(index) = self.accept_states.iter().position(|e| *e == target) {
+            self.accept_states.remove(index);
+        }
+    }
+}
+
+impl Alphabet for Nfa {
+    fn add_symbol(&mut self, symbol: char) {
+        if !self.alphabet.contains(&symbol) {
+            self.alphabet.push(symbol);
+        }
+    }
+
+    fn remove_symbol(&mut self, symbol: char) {
+        if let Some(position) = self.alphabet.iter().position(|e| *e == symbol) {
+            self.alphabet.remove(position);
+        }
+
+        self.transition_fn.retain(|&(_, s), _| s != symbol);
+    }
+}
+
+impl StateIter for Nfa {
+    fn is_empty(&self) -> bool {
+        self.states.len() == 1
+    }
+
+    #[inline]
+    fn states_iter(&self) -> impl Iterator<Item = &u32> {
+        self.states.iter()
+    }
+
+    #[inline]
+    fn states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
+        self.states.iter_mut()
+    }
+
+    #[inline]
+    fn accept_states_iter(&self) -> impl Iterator<Item = &u32> {
+        self.accept_states.iter()
+    }
+
+    #[inline]
+    fn accept_states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
+        self.accept_states.iter_mut()
+    }
+}
+
+impl AlphabetIter for Nfa {
+    #[inline]
+    fn alphabet_iter(&self) -> impl Iterator<Item = &char> {
+        self.alphabet.iter()
+    }
+
+    #[inline]
+    fn alphabet_iter_mut(&mut self) -> impl Iterator<Item = &mut char> {
+        self.alphabet.iter_mut()
     }
 }
 
@@ -102,42 +185,6 @@ impl Nfa {
         Nfa::default()
     }
 
-    fn add_state(&mut self) {
-        let last = self.states.last().unwrap();
-        self.states.push(last + 1);
-    }
-
-    fn remove_state(&mut self) {
-        if *self.states.last().unwrap() == 0 {
-            return;
-        }
-        self.states.pop();
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.states.len() == 1
-    }
-
-    #[inline]
-    pub fn states_iter(&self) -> impl Iterator<Item = &u32> {
-        self.states.iter()
-    }
-
-    #[inline]
-    pub fn states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
-        self.states.iter_mut()
-    }
-
-    #[inline]
-    pub fn alphabet_iter(&self) -> impl Iterator<Item = &char> {
-        self.alphabet.iter()
-    }
-
-    #[inline]
-    pub fn alphabet_iter_mut(&mut self) -> impl Iterator<Item = &mut char> {
-        self.alphabet.iter_mut()
-    }
-
     #[inline]
     pub fn transitions_iter(&self) -> impl Iterator<Item = (&(u32, char), &Vec<u32>)> {
         self.transition_fn.iter()
@@ -146,16 +193,6 @@ impl Nfa {
     #[inline]
     pub fn transitions_iter_mut(&mut self) -> impl Iterator<Item = (&(u32, char), &mut Vec<u32>)> {
         self.transition_fn.iter_mut()
-    }
-
-    #[inline]
-    pub fn accept_states_iter(&self) -> impl Iterator<Item = &u32> {
-        self.accept_states.iter()
-    }
-
-    #[inline]
-    pub fn accept_states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
-        self.accept_states.iter_mut()
     }
 
     #[inline]
@@ -172,21 +209,7 @@ impl Nfa {
         self.states.len()
     }
 
-    fn add_symbol(&mut self, symbol: char) {
-        if !self.alphabet.contains(&symbol) {
-            self.alphabet.push(symbol);
-        }
-    }
-
-    fn remove_symbol(&mut self, symbol: char) {
-        if let Some(position) = self.alphabet.iter().position(|e| *e == symbol) {
-            self.alphabet.remove(position);
-        }
-
-        self.transition_fn.retain(|&(_, s), _| s != symbol);
-    }
-
-    fn add_transition(&mut self, source: (u32, char), target: u32) -> Result<(), &'static str> {
+    fn add_transition(&mut self, source: &(u32, char), target: u32) -> Result<(), &'static str> {
         if !self.states.contains(&source.0) {
             return Err("Source state is not a valid state");
         }
@@ -197,7 +220,7 @@ impl Nfa {
             return Err("Destination state is not a valid state");
         }
 
-        match self.transition_fn.get_mut(&source) {
+        match self.transition_fn.get_mut(source) {
             Some(destinations) => {
                 if !destinations.contains(&target) {
                     destinations.push(target);
@@ -205,42 +228,27 @@ impl Nfa {
                 }
             }
             None => {
-                self.transition_fn.insert(source, vec![target]);
+                self.transition_fn.insert(*source, vec![target]);
             }
         }
 
         Ok(())
     }
 
-    fn remove_transition(&mut self, source: (u32, char), target: u32) {
-        if let Some(destinations) = self.transition_fn.get_mut(&source) {
+    fn remove_transition(&mut self, source: &(u32, char), target: u32) {
+        if let Some(destinations) = self.transition_fn.get_mut(source) {
             if let Some(index) = destinations.iter().position(|&e| e == target) {
                 destinations.remove(index);
 
                 if destinations.is_empty() {
-                    self.transition_fn.remove(&source);
+                    self.transition_fn.remove(source);
                 }
             }
         }
     }
 
-    fn get_transition(&self, key: (u32, char)) -> Option<&Vec<u32>> {
+    pub fn get_transition(&self, key: (u32, char)) -> Option<&Vec<u32>> {
         self.transition_fn.get(&key)
-    }
-
-    fn add_accept_state(&mut self, state: u32) {
-        if self.states.contains(&state) {
-            self.accept_states.push(state);
-            self.accept_states.sort();
-        }
-    }
-
-    fn remove_accept_state(&mut self, target: u32) {
-        if self.accept_states.contains(&target) {
-            if let Some(index) = self.accept_states.iter().position(|e| *e == target) {
-                self.accept_states.remove(index);
-            }
-        }
     }
 
     // metoda inkrementuje nazive stanja za neki broj increment
@@ -275,10 +283,10 @@ impl Nfa {
         let new_last = self.last_added_state();
 
         if self.accept_states.is_empty() {
-            self.add_transition((prev_last, symbol), new_last)?;
+            self.add_transition(&(prev_last, symbol), new_last)?;
         } else {
             for state in self.accept_states.clone() {
-                self.add_transition((state, symbol), new_last)?;
+                self.add_transition(&(state, symbol), new_last)?;
             }
             self.accept_states.clear();
         }
@@ -321,13 +329,13 @@ pub mod test_utils {
         nfa.add_symbol('B');
         nfa.add_symbol('C');
 
-        nfa.add_transition((0, 'A'), 0).unwrap();
-        nfa.add_transition((0, 'A'), 1).unwrap();
-        nfa.add_transition((0, 'B'), 3).unwrap();
-        nfa.add_transition((0, 'C'), 1).unwrap();
-        nfa.add_transition((1, 'C'), 2).unwrap();
-        nfa.add_transition((2, 'B'), 3).unwrap();
-        nfa.add_transition((2, 'B'), 1).unwrap();
+        nfa.add_transition(&(0, 'A'), 0).unwrap();
+        nfa.add_transition(&(0, 'A'), 1).unwrap();
+        nfa.add_transition(&(0, 'B'), 3).unwrap();
+        nfa.add_transition(&(0, 'C'), 1).unwrap();
+        nfa.add_transition(&(1, 'C'), 2).unwrap();
+        nfa.add_transition(&(2, 'B'), 3).unwrap();
+        nfa.add_transition(&(2, 'B'), 1).unwrap();
 
         nfa.add_accept_state(3);
 
@@ -343,14 +351,14 @@ pub mod test_utils {
         first.add_state();
         first.add_symbol('a');
         first.add_symbol('b');
-        first.add_transition((0, 'a'), 1).unwrap();
-        first.add_transition((1, EMPTY_STRING), 2).unwrap();
-        first.add_transition((2, 'b'), 3).unwrap();
+        first.add_transition(&(0, 'a'), 1).unwrap();
+        first.add_transition(&(1, EMPTY_STRING), 2).unwrap();
+        first.add_transition(&(2, 'b'), 3).unwrap();
         first.add_accept_state(3);
 
         second.add_state();
         second.add_symbol('a');
-        second.add_transition((0, 'a'), 1).unwrap();
+        second.add_transition(&(0, 'a'), 1).unwrap();
         second.add_accept_state(1);
 
         (first, second)
@@ -492,9 +500,9 @@ mod tests {
     fn nfa_removing_transition() {
         let mut nfa = test_utils::prepare_nfa();
 
-        nfa.remove_transition((0, 'A'), 1);
-        nfa.remove_transition((1, 'C'), 2);
-        nfa.remove_transition((2, 'B'), 1);
+        nfa.remove_transition(&(0, 'A'), 1);
+        nfa.remove_transition(&(1, 'C'), 2);
+        nfa.remove_transition(&(2, 'B'), 1);
 
         assert_eq!(vec![0], *nfa.transition_fn.get(&(0, 'A')).unwrap());
         assert_eq!(Option::None, nfa.transition_fn.get(&(1, 'C')));

@@ -1,4 +1,7 @@
+use crate::language::EMPTY_STRING;
+use crate::nfa::Nfa;
 use itertools::Itertools;
+use std::collections::vec_deque::VecDeque;
 
 /// Generates a power set for a given set
 ///
@@ -17,7 +20,7 @@ use itertools::Itertools;
 ///     vec![2]
 /// ], result);
 /// ```
-pub fn create_power_set(set: &Vec<u32>) -> Vec<Vec<u32>> {
+pub fn create_power_set(set: &[u32]) -> Vec<Vec<u32>> {
     let powerset: Vec<Vec<u32>> = (0..=set.len())
         .tuple_combinations()
         .map(|(start, end)| (start as u32..end as u32).collect_vec())
@@ -31,7 +34,7 @@ pub fn create_power_set(set: &Vec<u32>) -> Vec<Vec<u32>> {
 /// # Examples
 /// ```rust
 /// use fmsi::util;
-/// 
+///
 /// // valid regex
 /// assert!(util::check_for_correctness("ab|b(ab|c)*").is_ok());
 ///
@@ -63,21 +66,100 @@ pub fn check_for_correctness(regex: &str) -> Result<(), &'static str> {
     }
 }
 
+/// Calculates the epsilon clojure for a given state
+/// of a given nfa.
+///
+/// # Example
+/// ```rust
+/// use fmsi::nfa::Nfa;
+/// use fmsi::util::state_epsilon_clojure;
+///
+/// let nfa = Nfa::from("a|(ab|b)*").unwrap();
+/// let result = state_epsilon_clojure(&nfa, 0);
+///
+/// assert_eq!(vec![0, 1, 3, 4, 5, 6, 9], result);
+/// ```
+#[allow(dead_code)]
+pub fn state_epsilon_clojure(nfa: &Nfa, state: u32) -> Vec<u32> {
+    let mut clojure = vec![state];
+    let mut queue: VecDeque<u32> = VecDeque::new();
+
+    // add the given state to the queue
+    queue.push_back(state);
+
+    loop {
+        // grab the first element from the queue
+        let current = queue.pop_front();
+
+        match current {
+            Some(current) => {
+                if let Some(destinations) = nfa.get_transition((current, EMPTY_STRING)) {
+                    for &state in destinations {
+                        // if there are epsilon transitions for this state
+                        // add them to the clojure
+                        if !clojure.contains(&state) {
+                            clojure.push(state);
+                        }
+
+                        // if they aren't already in the queue, add them
+                        if !queue.contains(&state) {
+                            queue.push_back(state);
+                        }
+                    }
+                }
+            }
+            // if there are no elements left, the algorithm is done
+            None => break,
+        }
+    }
+    clojure.sort();
+    clojure
+}
+
+/// Calculates the epsilon clojure for a given set of states
+/// of a given nfa.
+///
+/// # Example
+/// ```rust
+/// use fmsi::nfa::Nfa;
+/// use fmsi::util::set_epsilon_clojure;
+///
+/// let nfa = Nfa::from("a|(ab|b)*").unwrap();
+/// let result = set_epsilon_clojure(&nfa, &[0, 8]);
+///
+/// assert_eq!(vec![0, 1, 3, 4, 5, 6, 8, 9], result);
+/// ```
+pub fn set_epsilon_clojure(nfa: &Nfa, set: &[u32]) -> Vec<u32> {
+    let mut clojure: Vec<u32> = Vec::new();
+
+    for state in set {
+        let mut set_clojure = state_epsilon_clojure(nfa, *state);
+        set_clojure.retain(|&element| !clojure.contains(&element));
+        clojure.extend(set_clojure);
+    }
+
+    clojure.sort();
+    clojure
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn util_power_set() {
-        let result = create_power_set(&vec![0, 1, 2]);
-        assert_eq!(vec![
-            vec![0],
-            vec![0, 1],
-            vec![0, 1, 2],
-            vec![1],
-            vec![1, 2],
-            vec![2]
-        ], result);
+        let result = create_power_set(&[0, 1, 2]);
+        assert_eq!(
+            vec![
+                vec![0],
+                vec![0, 1],
+                vec![0, 1, 2],
+                vec![1],
+                vec![1, 2],
+                vec![2]
+            ],
+            result
+        );
 
         println!("{:?}", result);
     }
@@ -93,5 +175,24 @@ mod tests {
         assert!(check_for_correctness("(ab|b)*)").is_err());
 
         assert!(check_for_correctness("a|b(ab*|a)*").is_ok());
+    }
+
+    #[test]
+    fn nfa_state_epsilon_clojure() {
+        let nfa = Nfa::from("a|(ab|b)*").unwrap();
+
+        assert_eq!(vec![0, 1, 3, 4, 5, 6, 9], state_epsilon_clojure(&nfa, 0));
+        assert_eq!(vec![4, 5, 6, 8, 9], state_epsilon_clojure(&nfa, 8));
+        assert_eq!(vec![5, 6, 9], state_epsilon_clojure(&nfa, 5));
+        assert_eq!(vec![1], state_epsilon_clojure(&nfa, 1));
+    }
+
+    #[test]
+    fn nfa_set_epsilon_clojure() {
+        let nfa = Nfa::from("a|(ab|b)*").unwrap();
+
+        assert_eq!(vec![0, 1, 3, 4, 5, 6, 8, 9], set_epsilon_clojure(&nfa, &[0, 8]));
+        assert_eq!(vec![4, 5, 6, 9], set_epsilon_clojure(&nfa, &[4, 5]));
+        assert_eq!(vec![1, 6], set_epsilon_clojure(&nfa, &[1, 6]));
     }
 }

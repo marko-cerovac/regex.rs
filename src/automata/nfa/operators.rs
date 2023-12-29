@@ -1,4 +1,5 @@
 use super::Nfa;
+use crate::automata::traits::*;
 use crate::language::EMPTY_STRING;
 
 /// Concatenates the second Nfa on to the first
@@ -27,16 +28,16 @@ pub fn concat(first: &mut Nfa, mut second: Nfa) -> Result<(), &'static str> {
     // onto the first
     for entry in second.transition_fn.iter() {
         for state in entry.1 {
-            first.add_transition((entry.0 .0, entry.0 .1), *state)?;
+            first.add_transition(&(entry.0 .0, entry.0 .1), *state)?;
         }
     }
 
     if first.accept_states.is_empty() {
-        first.add_transition((increment - 1, EMPTY_STRING), increment)?
+        first.add_transition(&(increment - 1, EMPTY_STRING), increment)?
     } else {
         // concect first's accept states with second's start state
         for accept_state in first.accept_states.clone() {
-            first.add_transition((accept_state, EMPTY_STRING), increment)?;
+            first.add_transition(&(accept_state, EMPTY_STRING), increment)?;
         }
     }
 
@@ -62,7 +63,7 @@ pub fn kleene_star(nfa: &mut Nfa) -> Result<(), &'static str> {
     // final state to the previous first state
     let accept_states = nfa.accept_states.clone();
     accept_states.iter().for_each(|e| {
-        nfa.add_transition((*e, EMPTY_STRING), 1).unwrap();
+        nfa.add_transition(&(*e, EMPTY_STRING), 1).unwrap();
     });
 
     Ok(())
@@ -105,20 +106,10 @@ pub fn union(first: &mut Nfa, mut second: Nfa) -> Result<(), &'static str> {
         }
     }
 
-    // first.add_state();
-    // let new_final = first.last_added_state();
-    //
-    // for accept_state in first.accept_states.clone() {
-    //     first.add_transition((accept_state, EMPTY_STRING), new_final)?;
-    // }
-
-    // povezi novo pocetno stanje sa
-    // proslim pocetnim stanjima
-    first.add_transition((0, EMPTY_STRING), 1)?;
-    first.add_transition((0, EMPTY_STRING), other_start_state)?;
-
-    // first.accept_states.clear();
-    // first.accept_states.push(new_final);
+    // conncect new first transition with the
+    // two branches
+    first.add_transition(&(0, EMPTY_STRING), 1)?;
+    first.add_transition(&(0, EMPTY_STRING), other_start_state)?;
 
     Ok(())
 }
@@ -137,12 +128,12 @@ mod tests {
         first.add_state();
         first.add_symbol('A');
         first.add_symbol('B');
-        first.add_transition((0, EMPTY_STRING), 1).unwrap();
-        first.add_transition((0, 'A'), 0).unwrap();
-        first.add_transition((0, 'B'), 2).unwrap();
-        first.add_transition((1, EMPTY_STRING), 2).unwrap();
-        first.add_transition((1, 'A'), 0).unwrap();
-        first.add_transition((2, 'A'), 2).unwrap();
+        first.add_transition(&(0, EMPTY_STRING), 1).unwrap();
+        first.add_transition(&(0, 'A'), 0).unwrap();
+        first.add_transition(&(0, 'B'), 2).unwrap();
+        first.add_transition(&(1, EMPTY_STRING), 2).unwrap();
+        first.add_transition(&(1, 'A'), 0).unwrap();
+        first.add_transition(&(2, 'A'), 2).unwrap();
         first.add_accept_state(2);
         println!("first: {:?}", first.transition_fn);
 
@@ -150,10 +141,10 @@ mod tests {
         second.add_state();
         second.add_symbol('A');
         second.add_symbol('B');
-        second.add_transition((0, 'A'), 1).unwrap();
-        second.add_transition((1, 'B'), 2).unwrap();
-        second.add_transition((2, 'B'), 0).unwrap();
-        second.add_transition((2, EMPTY_STRING), 1).unwrap();
+        second.add_transition(&(0, 'A'), 1).unwrap();
+        second.add_transition(&(1, 'B'), 2).unwrap();
+        second.add_transition(&(2, 'B'), 0).unwrap();
+        second.add_transition(&(2, EMPTY_STRING), 1).unwrap();
         second.add_accept_state(2);
         println!("second: {:?}", second.transition_fn);
 
