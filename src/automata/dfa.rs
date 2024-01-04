@@ -1,7 +1,10 @@
 // use crate::automata::iters::*;
+use crate::automata::iters::*;
 use crate::automata::traits::*;
+use crate::nfa::Nfa;
 use std::collections::HashMap;
 use std::default::Default;
+mod conversion;
 
 #[allow(dead_code)] // TODO: remove
 #[derive(Debug)]
@@ -104,11 +107,59 @@ impl Transition for Dfa {
     // }
 }
 
+impl StateIter for Dfa {
+    fn is_empty(&self) -> bool {
+        self.states.len() == 1
+    }
+
+    #[inline]
+    fn states_iter(&self) -> impl Iterator<Item = &u32> {
+        self.states.iter()
+    }
+
+    #[inline]
+    fn states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
+        self.states.iter_mut()
+    }
+
+    #[inline]
+    fn accept_states_iter(&self) -> impl Iterator<Item = &u32> {
+        self.accept_states.iter()
+    }
+
+    #[inline]
+    fn accept_states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
+        self.accept_states.iter_mut()
+    }
+}
+
+impl TransitionIter for Dfa {
+    type Target = u32;
+
+    #[inline]
+    fn transitions_iter(&self) -> impl Iterator<Item = (&(u32, char), &u32)> {
+        self.transition_fn.iter()
+    }
+
+    #[inline]
+    fn transitions_iter_mut(&mut self) -> impl Iterator<Item = (&(u32, char), &mut u32)> {
+        self.transition_fn.iter_mut()
+    }
+
+    fn get_transition(&self, key: (u32, char)) -> Option<&u32> {
+        self.transition_fn.get(&key)
+    }
+}
 
 #[allow(dead_code)] // TODO: remove
 impl Dfa {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn from(regex: &str) -> Result<Self, &'static str> {
+        let nfa = Nfa::from(regex)?;
+        Ok(nfa.to_dfa())
     }
 
     #[inline]
@@ -143,5 +194,20 @@ impl Dfa {
         }
 
         Ok(self.accept_states.contains(current_state))
+    }
+
+    fn minimize(&mut self) {
+        // create two equivalence sets,
+        // one for final, and one for non final states
+        let mut sets = vec![self.accept_states.clone()];
+        sets.push(
+            self.states
+                .iter()
+                .filter(|e| !self.accept_states.contains(e))
+                .cloned()
+                .collect(),
+        );
+
+        todo!();
     }
 }

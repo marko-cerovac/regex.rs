@@ -216,14 +216,7 @@ impl Nfa {
             }
         }
 
-        loop {
-            let current = stack.pop();
-
-            if current.is_none() {
-                break;
-            }
-            let current = current.unwrap();
-
+        while let Some(current) = stack.pop() {
             match current.1 {
                 OnReturn::Bracket => {
                     return Err(err_msg);
@@ -308,9 +301,9 @@ impl Nfa {
     pub fn to_dfa(&self) -> Dfa {
         let mut dfa = Dfa::new();
         let mut queue: VecDeque<Vec<u32>> = VecDeque::new();
-        let mut new_states: Vec<Vec<u32>> = Vec::new();
-        let mut new_transitions: HashMap<(Vec<u32>, char), Vec<u32>> = HashMap::new();
-        let new_alphabet: Vec<char> = self
+        let mut states: Vec<Vec<u32>> = Vec::new();
+        let mut transitions: HashMap<(Vec<u32>, char), Vec<u32>> = HashMap::new();
+        let alphabet: Vec<char> = self
             .alphabet
             .iter()
             .filter(|&s| *s != EMPTY_STRING)
@@ -318,43 +311,33 @@ impl Nfa {
             .collect();
 
         // add the epsilon clojure of the start state to the new_states and the queue
-        new_states.push(util::state_epsilon_clojure(self, self.start_state()));
-        queue.push_back(new_states.first().unwrap().clone());
+        states.push(util::state_epsilon_clojure(self, self.start_state()));
+        queue.push_back(states.first().unwrap().clone());
 
-        loop {
-            let current = queue.pop_front();
+        while let Some(current) = queue.pop_front() {
+            // for every symbol in the alphabet
+            for symbol in alphabet.iter() {
+                // get every state that can be transitioned to
+                // from the current set of states
+                // and calculate an epsilon clojure on it
+                let new_tr = util::set_transitions(self, &current, *symbol);
+                let new_tr = util::set_epsilon_clojure(self, &new_tr);
 
-            match current {
-                Some(current) => {
-                    // for every symbol in the alphabet
-                    for symbol in new_alphabet.iter() {
-                        // get every state that can be transitioned to
-                        // from the current set of states
-                        // and calculate an epsilon clojure on it
-                        let new_tr = util::set_transitions(self, &current, *symbol);
-                        let new_tr = util::set_epsilon_clojure(self, &new_tr);
+                // insert the transition for it
+                transitions.insert((current.clone(), *symbol), new_tr.clone());
 
-                        // push it to the queue if it wasn't there already
-                        if !queue.contains(&new_tr) && !new_states.contains(&new_tr) {
-                            queue.push_back(new_tr.clone());
-                        }
-
-                        // insert the transition for it
-                        new_transitions.insert((current.clone(), *symbol), new_tr.clone());
-
-                        // if it's a new state, add it to the set of state sets
-                        if !new_states.contains(&new_tr) {
-                            new_states.push(new_tr);
-                        }
-                    }
+                // if it's a new state, add it to the set of state sets
+                // and push it to the queue
+                if !states.contains(&new_tr) {
+                    queue.push_back(new_tr.clone());
+                    states.push(new_tr);
                 }
-                None => break,
             }
         }
 
         // lookup table used for translating state sets to states
         let mut lookup_table: HashMap<&Vec<u32>, u32> = HashMap::new();
-        for (index, state) in new_states.iter().enumerate() {
+        for (index, state) in states.iter().enumerate() {
             lookup_table.insert(state, index as u32);
             dfa.add_state();
 
@@ -365,15 +348,15 @@ impl Nfa {
         dfa.remove_state();
 
         // add the alphabet to the dfa
-        new_alphabet.iter().for_each(|&s| dfa.add_symbol(s));
+        alphabet.iter().for_each(|&s| dfa.add_symbol(s));
 
         // add transitions to the dfa
-        for ((source, symbol), destination) in new_transitions.iter() {
+        for ((source, symbol), destination) in transitions.iter() {
             let source = lookup_table.get(source).unwrap();
             let destination = lookup_table.get(destination).unwrap();
 
-            dfa.add_transition(&(*source, *symbol), *destination).unwrap();
-
+            dfa.add_transition(&(*source, *symbol), *destination)
+                .unwrap();
         }
 
         dfa
