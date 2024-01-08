@@ -175,6 +175,7 @@ impl Nfa {
         enum OnReturn {
             Union,
             Bracket,
+            Concat,
             Finished,
         }
 
@@ -200,6 +201,10 @@ impl Nfa {
                             operators::concat(&mut new_last.0, last.0)?;
                             break;
                         }
+                        OnReturn::Concat => {
+                            let new_last = stack.last_mut().expect(err_msg);
+                            operators::concat(&mut new_last.0, last.0)?;
+                        }
                         OnReturn::Finished => return Ok(last.0.clone()),
                     }
                 },
@@ -207,11 +212,29 @@ impl Nfa {
                     operators::kleene_star(&mut current.0)?;
                 }
                 '|' => {
+                    // first concatenate previous nfa's on the stack
+                    // if they should be concatnated
+                    // and then push a new one to the stack
+                    loop {
+                        let last = stack.pop().expect(err_msg);
+                        match last.1 {
+                            OnReturn::Concat => {
+                                let previous = stack.last_mut().expect(err_msg);
+                                operators::concat(&mut previous.0, last.0)?;
+                            }
+                            _ => {
+                                stack.push(last);
+                                break;
+                            }
+                        }
+                    }
                     stack.push((Nfa::new(), OnReturn::Union));
                 }
                 alpha => {
-                    current.0.add_symbol(alpha);
-                    current.0.push_symbol(alpha)?;
+                    let mut new = Nfa::new();
+                    new.add_symbol(alpha);
+                    new.push_symbol(alpha)?;
+                    stack.push((new, OnReturn::Concat));
                 }
             }
         }
@@ -224,6 +247,10 @@ impl Nfa {
                 OnReturn::Union => {
                     let new_last = stack.last_mut().expect(err_msg);
                     operators::union(&mut new_last.0, current.0)?;
+                }
+                OnReturn::Concat => {
+                    let new_last = stack.last_mut().expect(err_msg);
+                    operators::concat(&mut new_last.0, current.0)?;
                 }
                 OnReturn::Finished => return Ok(current.0),
             }
@@ -422,20 +449,25 @@ mod tests {
     fn nfa_construction() {
         // regex: "a|(ab|b)*
         // {
-        //     states: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        //     states: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
         //     alphabet: ['\0', 'a', 'b'],
         //     transition_fn: {
-        //         (8, '\0'): [4],
-        //         (10, '\0'): [4],
-        //         (0, '\0'): [1, 3],
-        //         (7, 'b' ): [8],
-        //         (9, 'b'): [10],
-        //         (5, '\0'): [6, 9],
-        //         (1, 'a'): [2],
-        //         (3, '\0'): [4],
-        //         (6,'a'): [7]
+        //         (1, '\0'): [2],
+        //         (2, 'a'): [3],
+        //         (4, '\0'): [5],
+        //         (0, '\0'): [1, 4],
+        //         (5, '\0'): [6],
+        //         (6, '\0'): [7, 12],
+        //         (13, 'b'): [14],
+        //         (11, '\0'): [5],
+        //         (9, '\0'): [10],
+        //         (14, '\0'): [5],
+        //         (12, '\0'): [13],
+        //         (10, 'b'): [11],
+        //         (7, '\0'): [8],
+        //         (8, 'a'): [9]
         //     },
-        //     accept_states: [2, 3, 8, 10]
+        //     accept_states: [3, 4, 11, 14]
         // }
         let nfa = Nfa::from("a|(ab|b)*");
         println!("{:?}", nfa);
@@ -445,21 +477,25 @@ mod tests {
             Err(e) => panic!("{}", e),
         };
 
-        assert_eq!(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], nfa.states);
+        assert_eq!(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], nfa.states);
         assert_eq!(vec![EMPTY_STRING, 'a', 'b'], nfa.alphabet);
-        assert_eq!(vec![2, 3, 8, 10], nfa.accept_states);
+        assert_eq!(vec![3, 4, 11, 14], nfa.accept_states);
 
         let mut map: HashMap<(u32, char), Vec<u32>> = HashMap::new();
-        map.insert((0, EMPTY_STRING), vec![1, 3]);
-        map.insert((1, 'a'), vec![2]);
-        map.insert((3, EMPTY_STRING), vec![4]);
+        map.insert((0, EMPTY_STRING), vec![1, 4]);
+        map.insert((1, EMPTY_STRING), vec![2]);
+        map.insert((2, 'a'), vec![3]);
         map.insert((4, EMPTY_STRING), vec![5]);
-        map.insert((5, EMPTY_STRING), vec![6, 9]);
-        map.insert((6, 'a'), vec![7]);
-        map.insert((7, 'b'), vec![8]);
-        map.insert((8, EMPTY_STRING), vec![4]);
-        map.insert((9, 'b'), vec![10]);
-        map.insert((10, EMPTY_STRING), vec![4]);
+        map.insert((5, EMPTY_STRING), vec![6]);
+        map.insert((6, EMPTY_STRING), vec![7, 12]);
+        map.insert((7, EMPTY_STRING), vec![8]);
+        map.insert((8, 'a'), vec![9]);
+        map.insert((9, EMPTY_STRING), vec![10]);
+        map.insert((10, 'b'), vec![11]);
+        map.insert((11, EMPTY_STRING), vec![5]);
+        map.insert((12, EMPTY_STRING), vec![13]);
+        map.insert((13, 'b'), vec![14]);
+        map.insert((14, EMPTY_STRING), vec![5]);
 
         for (key, value) in map.iter() {
             if nfa.transition_fn.get(key).unwrap() != value {
@@ -470,27 +506,35 @@ mod tests {
         let pairs = [
             (0, 'a'),
             (0, 'b'),
-            (1, EMPTY_STRING),
+            (1, 'a'),
             (1, 'b'),
             (2, EMPTY_STRING),
-            (2, 'a'),
             (2, 'b'),
+            (3, EMPTY_STRING),
             (3, 'a'),
             (3, 'b'),
             (4, 'a'),
             (4, 'b'),
             (5, 'a'),
             (5, 'b'),
-            (6, EMPTY_STRING),
+            (6, 'a'),
             (6, 'b'),
-            (7, EMPTY_STRING),
             (7, 'a'),
-            (8, 'a'),
+            (7, 'b'),
+            (8, EMPTY_STRING),
             (8, 'b'),
-            (9, EMPTY_STRING),
             (9, 'a'),
+            (9, 'b'),
             (10, 'a'),
-            (10, 'b'),
+            (10, EMPTY_STRING),
+            (11, 'a'),
+            (11, 'b'),
+            (12, 'a'),
+            (12, 'b'),
+            (13, EMPTY_STRING),
+            (13, 'a'),
+            (14, 'a'),
+            (14, 'b'),
         ];
 
         for i in pairs {

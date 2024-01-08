@@ -77,7 +77,7 @@ pub fn check_for_correctness(regex: &str) -> Result<(), &'static str> {
 /// let nfa = Nfa::from("a|(ab|b)*").unwrap();
 /// let result = state_epsilon_clojure(&nfa, 0);
 ///
-/// assert_eq!(vec![0, 1, 3, 4, 5, 6, 9], result);
+/// assert_eq!(vec![0, 1, 2, 4, 5, 6, 7, 8, 12, 13], result);
 /// ```
 #[allow(dead_code)]
 pub fn state_epsilon_clojure(nfa: &Nfa, state: u32) -> Vec<u32> {
@@ -127,7 +127,7 @@ pub fn state_epsilon_clojure(nfa: &Nfa, state: u32) -> Vec<u32> {
 /// let nfa = Nfa::from("a|(ab|b)*").unwrap();
 /// let result = set_epsilon_clojure(&nfa, &[0, 8]);
 ///
-/// assert_eq!(vec![0, 1, 3, 4, 5, 6, 8, 9], result);
+/// assert_eq!(vec![0, 1, 2, 4, 5, 6, 7, 8, 12, 13], result);
 /// ```
 pub fn set_epsilon_clojure(nfa: &Nfa, set: &[u32]) -> Vec<u32> {
     let mut clojure: Vec<u32> = Vec::new();
@@ -151,9 +151,9 @@ pub fn set_epsilon_clojure(nfa: &Nfa, set: &[u32]) -> Vec<u32> {
 /// use fmsi::util::set_transitions;
 ///
 /// let nfa = Nfa::from("a|(ab|b)*").unwrap();
-/// let result = set_transitions(&nfa, &[7, 9], 'b');
+/// let result = set_transitions(&nfa, &[10, 13], 'b');
 ///
-/// assert_eq!(vec![8, 10], result);
+/// assert_eq!(vec![11, 14], result);
 /// ```
 pub fn set_transitions(nfa: &Nfa, set: &[u32], symbol: char) -> Vec<u32> {
     let mut target: Vec<u32> = Vec::new();
@@ -213,10 +213,12 @@ mod tests {
     fn nfa_state_epsilon_clojure() {
         let nfa = Nfa::from("a|(ab|b)*").unwrap();
 
-        assert_eq!(vec![0, 1, 3, 4, 5, 6, 9], state_epsilon_clojure(&nfa, 0));
-        assert_eq!(vec![4, 5, 6, 8, 9], state_epsilon_clojure(&nfa, 8));
-        assert_eq!(vec![5, 6, 9], state_epsilon_clojure(&nfa, 5));
-        assert_eq!(vec![1], state_epsilon_clojure(&nfa, 1));
+        assert_eq!(vec![0, 1, 2, 4, 5, 6, 7, 8, 12, 13], state_epsilon_clojure(&nfa, 0));
+        assert_eq!(vec![5, 6, 7, 8, 12, 13], state_epsilon_clojure(&nfa, 5));
+        assert_eq!(vec![5, 6, 7, 8, 12, 13, 14], state_epsilon_clojure(&nfa, 14));
+        assert_eq!(vec![1, 2], state_epsilon_clojure(&nfa, 1));
+        assert_eq!(vec![2], state_epsilon_clojure(&nfa, 2));
+        assert_eq!(vec![8], state_epsilon_clojure(&nfa, 8));
     }
 
     #[test]
@@ -224,15 +226,15 @@ mod tests {
         let nfa = Nfa::from("a|(ab|b)*").unwrap();
 
         assert_eq!(
-            vec![0, 1, 3, 4, 5, 6, 8, 9],
+            vec![0, 1, 2, 4, 5, 6, 7, 8, 12, 13],
             set_epsilon_clojure(&nfa, &[0, 8])
         );
         assert_eq!(
-            vec![0, 1, 3, 4, 5, 6, 8, 9],
-            set_epsilon_clojure(&nfa, &[0, 1, 3, 4, 5, 6, 8, 9])
+            vec![5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+            set_epsilon_clojure(&nfa, &[9, 11, 14])
         );
-        assert_eq!(vec![4, 5, 6, 9], set_epsilon_clojure(&nfa, &[4, 5]));
-        assert_eq!(vec![1, 6], set_epsilon_clojure(&nfa, &[1, 6]));
+        assert_eq!(vec![4, 5, 6, 7, 8, 12, 13], set_epsilon_clojure(&nfa, &[4, 5]));
+        assert_eq!(vec![2, 8, 13], set_epsilon_clojure(&nfa, &[2, 8, 13]));
     }
 
     #[test]
@@ -240,8 +242,8 @@ mod tests {
         let nfa = Nfa::from("a|(ab|b)*").unwrap();
         let empty: Vec<u32> = Vec::new();
 
-        assert_eq!(vec![8, 10], set_transitions(&nfa, &[7, 9], 'b'));
-        assert_eq!(vec![2, 7], set_transitions(&nfa, &[1, 6], 'a'));
+        assert_eq!(vec![11, 14], set_transitions(&nfa, &[10, 13], 'b'));
+        assert_eq!(vec![3, 9], set_transitions(&nfa, &[2, 8], 'a'));
         assert_eq!(empty, set_transitions(&nfa, &[0, 3, 4], 'a'));
     }
 }
