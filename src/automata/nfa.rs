@@ -443,7 +443,6 @@ pub mod test_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::panic;
 
     #[test]
     fn nfa_construction() {
