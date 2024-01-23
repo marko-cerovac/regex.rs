@@ -224,7 +224,6 @@ impl Dfa {
                 .iter()
                 .position(|set| set.contains(self.transition_fn.get(&(second, symbol)).unwrap()))
                 .unwrap();
-            println!("{}", self.transition_fn.get(&(second, symbol)).unwrap());
 
             if first_transition_id != second_transition_id {
                 return false;
@@ -357,8 +356,7 @@ mod tests {
 
     #[test]
     fn n_equivalence() {
-        let dfa = Nfa::from("a|(ab|b)*").unwrap().to_dfa();
-        println!("{:?}", dfa);
+        let dfa = Dfa::from("a|(ab|b)*").unwrap();
         let sets = vec![vec![0, 1, 2, 4], vec![3, 5]];
 
         assert!(dfa.are_equivalent(&sets, 1, 2));

@@ -8,8 +8,10 @@ fn main() {
     println!("{:?}", y);
     println!("------------------- Mnimized Dfa -------------------");
     let mut x = x.unwrap();
-    x.minimize();
+    let _ = x.minimize();
     println!("{:?}", x);
+    let regex = x.to_regex();
+    println!("{}", regex);
 }
 
 // Ok(Dfa {

@@ -277,17 +277,17 @@ impl Nfa {
         self.states.len()
     }
 
-    // metoda inkrementuje nazive stanja za neki broj increment
+    /// Increments state names by a given increment
     fn increment_states(&mut self, increment: u32) {
         let mut lookup_table: HashMap<(u32, char), Vec<u32>> = HashMap::new();
 
-        // inkrementuj imena u skupovima stanja i finalnih stanja
+        // increment names in the states and accept states sets
         self.states.iter_mut().for_each(|e| *e += increment);
         self.accept_states.iter_mut().for_each(|e| *e += increment);
 
-        // iskopiraj trenutnu tabelu tranzicija u privremenu lookup tablue
-        // (zbog borrow checker-a)
-        // u novoj tabeli uvecaj stanja u k,v parovima za inkrement
+        // copy the transition function in to a temporary lookup table
+        // (because of the borrow checker)
+        // and increement them by increemetn
         self.transition_fn.iter().for_each(|(key, value)| {
             lookup_table.insert((key.0 + increment, key.1), value.clone());
         });
@@ -295,7 +295,7 @@ impl Nfa {
         for entry in lookup_table.iter_mut() {
             entry.1.iter_mut().for_each(|e| *e += increment);
         }
-        // pomjeri lookup tabelu u svoju tablue
+        // move the lookup table to it's own transition fn
         self.transition_fn = lookup_table;
     }
 
