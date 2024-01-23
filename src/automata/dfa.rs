@@ -1,4 +1,3 @@
-use crate::automata::iters::*;
 use crate::automata::traits::*;
 use crate::nfa::Nfa;
 use std::collections::HashMap;
@@ -6,7 +5,6 @@ use std::default::Default;
 pub mod regex;
 // mod conversion;
 
-#[allow(dead_code)] // TODO: remove
 #[derive(Debug, Clone)]
 pub struct Dfa {
     states: Vec<u32>,
@@ -107,51 +105,6 @@ impl Transition for Dfa {
     // }
 }
 
-impl StateIter for Dfa {
-    fn is_empty(&self) -> bool {
-        self.states.len() == 1
-    }
-
-    #[inline]
-    fn states_iter(&self) -> impl Iterator<Item = &u32> {
-        self.states.iter()
-    }
-
-    #[inline]
-    fn states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
-        self.states.iter_mut()
-    }
-
-    #[inline]
-    fn accept_states_iter(&self) -> impl Iterator<Item = &u32> {
-        self.accept_states.iter()
-    }
-
-    #[inline]
-    fn accept_states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
-        self.accept_states.iter_mut()
-    }
-}
-
-impl TransitionIter for Dfa {
-    type Target = u32;
-
-    #[inline]
-    fn transitions_iter(&self) -> impl Iterator<Item = (&(u32, char), &u32)> {
-        self.transition_fn.iter()
-    }
-
-    #[inline]
-    fn transitions_iter_mut(&mut self) -> impl Iterator<Item = (&(u32, char), &mut u32)> {
-        self.transition_fn.iter_mut()
-    }
-
-    fn get_transition(&self, key: (u32, char)) -> Option<&u32> {
-        self.transition_fn.get(&key)
-    }
-}
-
-#[allow(dead_code)] // TODO: remove
 impl Dfa {
     pub fn new() -> Self {
         Default::default()
@@ -162,11 +115,6 @@ impl Dfa {
         let mut dfa = Nfa::from(regex)?.to_dfa();
         dfa.minimize()?;
         Ok(dfa)
-    }
-
-    #[inline]
-    fn start_state(&self) -> u32 {
-        *self.states.first().unwrap()
     }
 
     fn is_accept_state(&self, state: u32) -> bool {
@@ -208,7 +156,6 @@ impl Dfa {
         // first find the set indexes for the first and second state
         let first_id = sets.iter().position(|s| s.contains(&first)).unwrap();
         let second_id = sets.iter().position(|s| s.contains(&second)).unwrap();
-        println!("{:?}", sets); // DBG
 
         if first_id != second_id {
             return false;
@@ -358,7 +305,6 @@ mod tests {
     #[test]
     fn n_equivalence() {
         let dfa = Nfa::from("a|(ab|b)*").unwrap().to_dfa();
-        println!("{:?}", dfa);
         let sets = vec![vec![0, 1, 2, 4], vec![3, 5]];
 
         assert!(dfa.are_equivalent(&sets, 1, 2));

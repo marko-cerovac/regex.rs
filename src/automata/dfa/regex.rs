@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Clone)]
-#[allow(unused)] // REMOVE
 enum Token {
     Symbol(char),
     EmptyString,
@@ -17,7 +16,6 @@ enum Token {
 #[derive(Clone)]
 pub struct Equation(Vec<Token>);
 
-#[allow(unused)]
 impl Equation {
     pub fn new() -> Self {
         Equation(Vec::new())

@@ -8,7 +8,6 @@ use crate::util;
 use std::collections::{HashMap, VecDeque};
 use std::default::Default;
 
-#[allow(dead_code)] // TODO: remove
 #[derive(Debug, Clone)]
 pub struct Nfa {
     states: Vec<u32>,
@@ -71,32 +70,6 @@ impl Alphabet for Nfa {
     }
 }
 
-impl StateIter for Nfa {
-    fn is_empty(&self) -> bool {
-        self.states.len() == 1
-    }
-
-    #[inline]
-    fn states_iter(&self) -> impl Iterator<Item = &u32> {
-        self.states.iter()
-    }
-
-    #[inline]
-    fn states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
-        self.states.iter_mut()
-    }
-
-    #[inline]
-    fn accept_states_iter(&self) -> impl Iterator<Item = &u32> {
-        self.accept_states.iter()
-    }
-
-    #[inline]
-    fn accept_states_iter_mut(&mut self) -> impl Iterator<Item = &mut u32> {
-        self.accept_states.iter_mut()
-    }
-}
-
 impl Transition for Nfa {
     fn add_transition(&mut self, source: &(u32, char), target: u32) -> Result<(), &'static str> {
         if !self.states.contains(&source.0) {
@@ -137,18 +110,6 @@ impl Transition for Nfa {
     // }
 }
 
-impl AlphabetIter for Nfa {
-    #[inline]
-    fn alphabet_iter(&self) -> impl Iterator<Item = &char> {
-        self.alphabet.iter()
-    }
-
-    #[inline]
-    fn alphabet_iter_mut(&mut self) -> impl Iterator<Item = &mut char> {
-        self.alphabet.iter_mut()
-    }
-}
-
 impl TransitionIter for Nfa {
     type Target = Vec<u32>;
 
@@ -167,7 +128,6 @@ impl TransitionIter for Nfa {
     }
 }
 
-#[allow(dead_code)] // TODO: remove
 impl Nfa {
     pub fn from(expression: &str) -> Result<Self, &'static str> {
         util::check_for_correctness(expression)?;
