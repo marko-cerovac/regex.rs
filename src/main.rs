@@ -1,57 +1,36 @@
 fn main() {
-    let x = fmsi::Dfa::from("a|(ab|b)*");
-    let y = fmsi::Nfa::from("a|(ab|b)*");
+    let dfa = fmsi::Dfa::from("a|(ab|b)*").unwrap();
+    let nfa = fmsi::Nfa::from("a|(ab|b)*").unwrap();
 
-    println!("------------------- Dfa -------------------");
-    println!("{:?}", x);
     println!("------------------- Nfa -------------------");
-    println!("{:?}", y);
-    println!("------------------- Mnimized Dfa -------------------");
-    let mut x = x.unwrap();
-    let _ = x.minimize();
-    println!("{:?}", x);
-    let regex = x.to_regex();
+    println!("{:?}", nfa);
+    print!("\n\n\n");
+    println!("------------------- Non-minimized Dfa -------------------");
+    let non_min_dfa = nfa.to_dfa();
+    println!("{:?}", non_min_dfa);
+    print!("\n\n\n");
+    println!("------------------- Dfa -------------------");
+    println!("{:?}", dfa);
+    print!("\n\n\n");
+    println!("------------------- Regex -------------------");
+    let regex = dfa.to_regex();
     println!("{}", regex);
+    print!("\n\n\n");
+
+    let nfa = fmsi::Nfa::from("a*b*").unwrap();
+    let dfa = fmsi::Dfa::from("a*b*").unwrap();
+    println!("------------------- Nfa -------------------");
+    println!("{:?}", nfa);
+    print!("\n\n\n");
+    println!("------------------- Non-minimized Dfa -------------------");
+    let non_min_dfa = nfa.to_dfa();
+    println!("{:?}", non_min_dfa);
+    print!("\n\n\n");
+    println!("------------------- Dfa -------------------");
+    println!("{:?}", dfa);
+    print!("\n\n\n");
+    println!("------------------- Regex -------------------");
+    let regex = dfa.to_regex();
+    println!("{}", regex);
+    print!("\n\n\n");
 }
-
-// Ok(Dfa {
-//     states: [0, 1, 2, 3, 4, 5],
-//     alphabet: ['a', 'b'],
-//     transition_fn: {
-//         (0, 'a'): 1,
-//         (0, 'b'): 2,
-//         (1, 'a'): 3,
-//         (1, 'b'): 4,
-//         (2, 'a'): 5
-//         (2, 'b'): 2,
-//         (3, 'a'): 3,
-//         (3, 'b'): 3,
-//         (4, 'a'): 5,
-//         (4, 'b'): 2,
-//         (5, 'a'): 3,
-//         (5, 'b'): 4,
-//     },
-//     accept_states: [0, 1, 2, 4]
-// })
-
-// Ok(Nfa {
-//     states: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-//     alphabet: ['\0', 'a', 'b'],
-//     transition_fn: {
-//         (0, '\0'): [1, 4],
-//         (1, '\0'): [2],
-//         (2, 'a'): [3],
-//         (4, '\0'): [5],
-//         (5, '\0'): [6],
-//         (6, '\0'): [7, 12]
-//         (7, '\0'): [8],
-//         (8, 'a'): [9],
-//         (9, '\0'): [10],
-//         (10,'b'): [11],
-//         (11, '\0'): [5],
-//         (12, '\0'): [13],
-//         (13, 'b'): [14],
-//         (14, '\0'): [5],
-//     },
-//     accept_states: [3, 4, 11, 14]
-// })

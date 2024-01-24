@@ -1,33 +1,6 @@
 use crate::language::EMPTY_STRING;
 use crate::nfa::*;
-use itertools::Itertools;
 use std::collections::vec_deque::VecDeque;
-
-/// Generates a power set for a given set
-///
-/// # Examples
-/// ```rust
-/// use fmsi::util;
-///
-/// let result = util::create_power_set(&vec![0, 1, 2]);
-///
-/// assert_eq!(vec![
-///     vec![0],
-///     vec![0, 1],
-///     vec![0, 1, 2],
-///     vec![1],
-///     vec![1, 2],
-///     vec![2]
-/// ], result);
-/// ```
-pub fn create_power_set(set: &[u32]) -> Vec<Vec<u32>> {
-    let powerset: Vec<Vec<u32>> = (0..=set.len())
-        .tuple_combinations()
-        .map(|(start, end)| (start as u32..end as u32).collect_vec())
-        .collect();
-
-    powerset
-}
 
 /// Checks the fiven regular expression for correctness
 ///
@@ -79,7 +52,6 @@ pub fn check_for_correctness(regex: &str) -> Result<(), &'static str> {
 ///
 /// assert_eq!(vec![0, 1, 2, 4, 5, 6, 7, 8, 12, 13], result);
 /// ```
-#[allow(dead_code)]
 pub fn state_epsilon_clojure(nfa: &Nfa, state: u32) -> Vec<u32> {
     let mut clojure = vec![state];
     let mut queue: VecDeque<u32> = VecDeque::new();

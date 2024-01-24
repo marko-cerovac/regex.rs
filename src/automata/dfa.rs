@@ -166,12 +166,10 @@ impl Dfa {
                 .iter()
                 .position(|set| set.contains(self.transition_fn.get(&(first, symbol)).unwrap()))
                 .unwrap();
-            println!("{}", self.transition_fn.get(&(second, symbol)).unwrap());
             let second_transition_id = sets
                 .iter()
                 .position(|set| set.contains(self.transition_fn.get(&(second, symbol)).unwrap()))
                 .unwrap();
-            println!("{}", self.transition_fn.get(&(second, symbol)).unwrap());
 
             if first_transition_id != second_transition_id {
                 return false;
